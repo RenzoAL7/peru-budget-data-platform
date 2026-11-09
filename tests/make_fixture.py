@@ -37,7 +37,8 @@ with source.open("w", newline="") as handle:
             writer.writerow(row(mes, nivel, entidad, dev=100_000))
 
 duckdb.execute(
-    f"COPY (SELECT * from read_csv('{source}', header=true, all_varchar=true, hive_partitioning=false)) "
+    f"COPY (SELECT * from read_csv('{source}', header=true, all_varchar=true, "
+    "hive_partitioning=false)) "
     f"TO '{target}/data.parquet' (FORMAT PARQUET)"
 )
 source.unlink()
