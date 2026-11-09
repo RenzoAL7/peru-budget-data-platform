@@ -73,6 +73,9 @@ spec:
           envFrom: &env
             - configMapRef: {name: airflow-config}
             - secretRef: {name: airflow-env}
+          resources:
+            requests: {cpu: 50m, memory: 256Mi}
+            limits: {memory: 768Mi}
       containers:
         - name: api
           image: ghcr.io/renzoal7/gasto-airflow:local
