@@ -8,6 +8,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import duckdb
+
 from .config import Settings
 
 log = logging.getLogger(__name__)
@@ -41,6 +43,24 @@ def build_gold(settings: Settings) -> None:
     """Recalcula los marts a partir de todas las particiones silver."""
     log.info("Construyendo gold")
     _dbt(settings, "tag:gold")
+    export_marts(settings)
+
+
+def export_marts(settings: Settings) -> None:
+    """Guarda cada mart como Parquet para respaldarlo en la carpeta gold del bucket."""
+    target = settings.data_dir / "gold" / "marts"
+    target.mkdir(parents=True, exist_ok=True)
+    con = duckdb.connect(str(settings.data_dir / "warehouse.duckdb"), read_only=True)
+    try:
+        names = con.execute(
+            "SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'mart_%'"
+        ).fetchall()
+        for (name,) in names:
+            con.execute(
+                f"COPY {name} TO '{target / name}.parquet' (FORMAT PARQUET, COMPRESSION ZSTD)"
+            )
+    finally:
+        con.close()
 
 
 def bronze_years(settings: Settings) -> list[int]:

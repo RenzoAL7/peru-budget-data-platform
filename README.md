@@ -4,7 +4,7 @@ Plataforma de datos que convierte los archivos oficiales de gasto público del P
 
 Busca tu municipalidad, región o ministerio y mira cuánto dinero tuvo, cuánto gastó, en qué lo gastó y qué obras quedaron sin ejecutar.
 
-> *End-to-end data platform that ingests Peru's official public spending files (2009 to today), models them with dbt and DuckDB, orchestrates daily runs with Airflow on K3s, and serves a citizen-facing site on Cloudflare Pages.*
+> *End-to-end data platform that ingests Peru's official public spending files (2009 to today), models them with dbt and DuckDB, orchestrates daily runs with Airflow on K3s, and serves a citizen-facing site from the cluster.*
 
 ## Arquitectura
 
@@ -20,8 +20,9 @@ flowchart LR
     Bronze & Silver & Gold <--> OCI[(OCI Object Storage)]
     OCI -- modelo preentrenado --> Search
     Index --> Search
-    Gold --> Pages[Cloudflare Pages]
-    Pages -. función proxy .-> Search
+    Gold --> Site[Pod Nginx]
+    Site -. proxy .-> Search
+    Usuario((Público)) --> Traefik --> Site
     Git[GitHub Actions] --> GHCR[(GHCR)]
     GHCR --> Argo[Argo CD] --> k3s
 ```
@@ -33,7 +34,7 @@ flowchart LR
 | Transformación | dbt, DuckDB | Particiones por año, marts y pruebas de calidad |
 | Orquestación | Airflow, KubernetesPodOperator | Corrida diaria y revisión mensual del histórico |
 | Búsqueda | FastAPI, ONNX, modelo multilingüe | Encuentra "puesto de salud" al buscar "posta médica" |
-| Publicación | Cloudflare Pages | Página estática sin servidor |
+| Publicación | Nginx, Traefik | Página estática en un pod del clúster |
 | Despliegue | GitHub Actions, GHCR, Argo CD | Imágenes multi-arquitectura fijadas por digest |
 
 ## Decisiones de ingeniería

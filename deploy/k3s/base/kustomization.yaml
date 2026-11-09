@@ -8,5 +8,6 @@ resources:
   - postgres.yaml
   - airflow.yaml
   - search.yaml
+  - site.yaml
   - network-policy.yaml
   - quota.yaml

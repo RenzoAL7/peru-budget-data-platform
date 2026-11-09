@@ -191,7 +191,7 @@ async function obras() {
 async function wireObraSearch() {
   const form = document.getElementById("buscar-obra");
   const status = document.getElementById("obra-estado");
-  const health = await fetch("api/buscar?q=obra&limite=1").catch(() => null);
+  const health = await fetch("api/estado").catch(() => null);
   if (!health?.ok) return;
   form.hidden = false;
   form.addEventListener("submit", async (event) => {

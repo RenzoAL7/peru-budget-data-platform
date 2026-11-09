@@ -32,7 +32,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        image: [pipeline, search, airflow]
+        image: [pipeline, search, airflow, site]
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
@@ -44,6 +44,17 @@ jobs:
             pipeline) docker run --rm check:pipeline gasto --help ;;
             search) docker run --rm check:search python -c "import app" ;;
             airflow) docker run --rm check:airflow airflow version ;;
+            site)
+              docker run -d --name site-check --read-only --tmpfs /tmp:rw,noexec,nosuid,size=32m \
+                --cap-drop ALL --security-opt no-new-privileges -p 127.0.0.1:8088:8080 check:site
+              for attempt in $(seq 1 20); do
+                curl -fsS http://127.0.0.1:8088/healthz && break
+                sleep 1
+              done
+              curl -fsS http://127.0.0.1:8088/presupuesto/ | grep -q "Plata Pública"
+              test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8088/presupuesto)" = 301
+              docker rm -f site-check
+              ;;
           esac
       - uses: docker/login-action@v3
         with:

@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gasto-site
+spec:
+  selector: {app: gasto-site}
+  ports:
+    - {name: http, port: 8080}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gasto-site
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: gasto-site}
+  template:
+    metadata:
+      labels: {app: gasto-site}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 101, fsGroup: 101, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: nginx
+          image: ghcr.io/renzoal7/gasto-site:local
+          ports:
+            - {containerPort: 8080, name: http}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          readinessProbe:
+            httpGet: {path: /healthz, port: 8080}
+          resources:
+            requests: {cpu: 20m, memory: 32Mi}
+            limits: {memory: 128Mi}
+          volumeMounts:
+            - {name: data, mountPath: /data, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}
+        - name: data
+          persistentVolumeClaim: {claimName: gasto-data, readOnly: true}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gasto-site-ip
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    # Va por encima de la ruta general "/" de TerraDock, que tiene prioridad 1.
+    traefik.ingress.kubernetes.io/router.priority: "10"
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /presupuesto
+            pathType: Prefix
+            backend:
+              service:
+                name: gasto-site
+                port: {name: http}
