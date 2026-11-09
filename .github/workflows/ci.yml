@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Calidad y pruebas
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Instalar dependencias
+        run: make install
+      - name: Formato y analisis estatico
+        run: make check
+      - name: Pruebas unitarias
+        run: make test
+      - name: Transformaciones dbt con datos de prueba
+        env:
+          DATA_DIR: ${{ runner.temp }}/data
+          DUCKDB_MEMORY_LIMIT: 2GB
+          MIN_MUNICIPALIDADES: "1"
+          DUCKDB_THREADS: "2"
+        run: |
+          .venv/bin/python tests/make_fixture.py "$DATA_DIR"
+          PATH="$PWD/.venv/bin:$PATH" PYTHONPATH=src python -m gasto_pipeline.cli transform
+          PATH="$PWD/.venv/bin:$PATH" PYTHONPATH=src python -m gasto_pipeline.cli publish
+          test -s "$DATA_DIR/published/data/meta.json"
+      - name: Validar DAGs de Airflow
+        run: |
+          uv venv --python 3.12 .airflow
+          uv pip install --python .airflow/bin/python "apache-airflow==3.4.0" apache-airflow-providers-cncf-kubernetes
+          AIRFLOW__CORE__LOAD_EXAMPLES=False AIRFLOW_HOME="$RUNNER_TEMP/airflow" .airflow/bin/python tests/validate_dags.py
+      - name: Renderizar manifiestos
+        run: make render
