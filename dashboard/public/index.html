@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es-PE">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plata Pública Perú</title>
+  <meta name="description" content="Busca tu municipalidad, región o ministerio y mira cuánto dinero público tuvo, cuánto gastó y qué obras quedaron sin ejecutar.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip" href="#contenido">Saltar al contenido</a>
+  <header class="top">
+    <a class="brand" href="#/">Plata Pública <span>Perú</span></a>
+    <nav aria-label="Secciones">
+      <a href="#/obras">Obras</a>
+      <a href="#/ranking">Ranking</a>
+      <a href="#/datos">Cómo funciona</a>
+    </nav>
+  </header>
+  <main id="contenido" tabindex="-1"><p class="loading">Cargando datos…</p></main>
+  <footer>
+    <p>Fuente: <a href="https://datosabiertos.mef.gob.pe/" rel="noopener">Datos Abiertos del Ministerio de Economía y Finanzas</a>. Proyecto independiente, no es un sitio oficial del Estado.</p>
+    <p id="pie"></p>
+  </footer>
+  <div id="tip" role="status" hidden></div>
+  <script src="app.js" type="module"></script>
+</body>
+</html>

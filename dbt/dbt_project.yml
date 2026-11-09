@@ -1,0 +1,26 @@
+name: gasto_peru
+version: "1.0.0"
+config-version: 2
+profile: gasto_peru
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+target-path: target
+clean-targets: [target, dbt_packages]
+
+vars:
+  year: 2026
+  data_dir: "{{ env_var('DATA_DIR') }}"
+  # Umbral para listar un proyecto en la seccion de obras pendientes (soles).
+  min_proyecto_pim: 500000
+
+models:
+  gasto_peru:
+    staging:
+      +materialized: view
+      +tags: [silver]
+    core:
+      +tags: [silver]
+    marts:
+      +materialized: table
+      +tags: [gold]

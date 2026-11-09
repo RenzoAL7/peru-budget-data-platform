@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: gasto-publico
+spec:
+  hard:
+    limits.memory: 12Gi
+    requests.memory: 5Gi

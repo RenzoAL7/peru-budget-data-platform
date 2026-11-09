@@ -1,0 +1,5 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Perfil actual: VM de 2 OCPU y 12 GB compartida con otras aplicaciones.
+resources:
+  - ../../base

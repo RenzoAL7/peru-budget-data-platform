@@ -1,0 +1,134 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: airflow
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: airflow-pod-runner
+rules:
+  - apiGroups: [""]
+    resources: [pods, pods/log, pods/exec]
+    verbs: [create, get, list, watch, delete, patch]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [list, watch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: airflow-pod-runner
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: airflow-pod-runner
+subjects:
+  - kind: ServiceAccount
+    name: airflow
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: airflow-config
+data:
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__PARALLELISM: "4"
+  AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+  AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api:8080/execution/
+  AIRFLOW__API__EXPOSE_CONFIG: "False"
+  AIRFLOW__SCHEDULER__PARSING_PROCESSES: "1"
+  GASTO_NAMESPACE: gasto-publico
+  PIPELINE_MEMORY_LIMIT: 5Gi
+  PIPELINE_CPU_LIMIT: 1500m
+  PIPELINE_IMAGE: ghcr.io/renzoal7/gasto-pipeline@sha256:PIPELINE_DIGEST
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-api
+spec:
+  selector: {app: airflow-api}
+  ports:
+    - port: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: airflow-api}
+  template:
+    metadata:
+      labels: {app: airflow-api}
+    spec:
+      serviceAccountName: airflow
+      securityContext: {runAsUser: 50000, fsGroup: 50000}
+      initContainers:
+        - name: migrate
+          image: ghcr.io/renzoal7/gasto-airflow:local
+          args: [db, migrate]
+          envFrom: &env
+            - configMapRef: {name: airflow-config}
+            - secretRef: {name: airflow-env}
+      containers:
+        - name: api
+          image: ghcr.io/renzoal7/gasto-airflow:local
+          args: [api-server, --port, "8080", --workers, "1"]
+          ports:
+            - containerPort: 8080
+          envFrom: *env
+          readinessProbe:
+            httpGet: {path: /api/v2/monitor/health, port: 8080}
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests: {cpu: 100m, memory: 512Mi}
+            limits: {memory: 1Gi}
+          volumeMounts:
+            - {name: logs, mountPath: /opt/airflow/logs}
+      volumes:
+        - name: logs
+          persistentVolumeClaim: {claimName: airflow-logs}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-scheduler
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: airflow-scheduler}
+  template:
+    metadata:
+      labels: {app: airflow-scheduler}
+    spec:
+      serviceAccountName: airflow
+      securityContext: {runAsUser: 50000, fsGroup: 50000}
+      containers:
+        - name: scheduler
+          image: ghcr.io/renzoal7/gasto-airflow:local
+          args: [scheduler]
+          envFrom: &env
+            - configMapRef: {name: airflow-config}
+            - secretRef: {name: airflow-env}
+          resources:
+            requests: {cpu: 100m, memory: 512Mi}
+            limits: {memory: 1200Mi}
+          volumeMounts:
+            - {name: logs, mountPath: /opt/airflow/logs}
+        - name: dag-processor
+          image: ghcr.io/renzoal7/gasto-airflow:local
+          args: [dag-processor]
+          envFrom: *env
+          resources:
+            requests: {cpu: 50m, memory: 256Mi}
+            limits: {memory: 512Mi}
+          volumeMounts:
+            - {name: logs, mountPath: /opt/airflow/logs}
+      volumes:
+        - name: logs
+          persistentVolumeClaim: {claimName: airflow-logs}

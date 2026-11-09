@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+data/
+*.duckdb
+*.duckdb.wal
+.env
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+dbt/.user.yml
+node_modules/
+.wrangler/
+.DS_Store
+.claude/

@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gasto-search
+spec:
+  selector: {app: gasto-search}
+  ports:
+    - port: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gasto-search
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector:
+    matchLabels: {app: gasto-search}
+  template:
+    metadata:
+      labels: {app: gasto-search}
+    spec:
+      automountServiceAccountToken: false
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+      initContainers:
+        - name: pull-model
+          image: ghcr.io/renzoal7/gasto-search:local
+          command: [gasto, pull-model]
+          envFrom: &env
+            - configMapRef: {name: gasto-config}
+            - secretRef: {name: gasto-secrets}
+          securityContext: &sc {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts:
+            - {name: models, mountPath: /models}
+      containers:
+        - name: api
+          image: ghcr.io/renzoal7/gasto-search:local
+          ports:
+            - containerPort: 8080
+          env:
+            - {name: INDEX_PATH, value: /data/gold/search/index.npz}
+            - {name: DUCKDB_THREADS, value: "2"}
+            - {name: FASTEMBED_CACHE_PATH, value: /models}
+            - {name: MODEL_OFFLINE, value: "1"}
+            - name: SEARCH_TOKEN
+              valueFrom:
+                secretKeyRef: {name: gasto-secrets, key: SEARCH_TOKEN}
+          securityContext: *sc
+          readinessProbe:
+            httpGet: {path: /readyz, port: 8080}
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 30
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8080}
+            periodSeconds: 30
+          resources:
+            requests: {cpu: 100m, memory: 700Mi}
+            limits: {memory: 1500Mi}
+          volumeMounts:
+            - {name: models, mountPath: /models}
+            - {name: data, mountPath: /data, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - name: models
+          emptyDir: {sizeLimit: 2Gi}
+        - name: tmp
+          emptyDir: {sizeLimit: 256Mi}
+        - name: data
+          persistentVolumeClaim: {claimName: gasto-data, readOnly: true}

@@ -1,0 +1,20 @@
+version: 2
+models:
+  - name: mart_entidad
+    columns:
+      - name: entidad_id
+        data_tests: [unique, not_null]
+  - name: mart_cobertura
+    columns:
+      - name: ano
+        data_tests: [unique, not_null]
+      - name: estado
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [completo, incompleto]
+  - name: mart_entidad_anual
+    data_tests:
+      - dbt_utils_free_unique:
+          arguments:
+            columns: [entidad_id, ano]

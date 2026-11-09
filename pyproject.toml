@@ -1,0 +1,34 @@
+[project]
+name = "peru-budget-data-platform"
+version = "1.0.0"
+description = "Pipeline ELT de la ejecucion del gasto publico del Peru (MEF, 2009 a la actualidad)"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = ["duckdb>=1.4", "requests>=2.32", "boto3>=1.35"]
+
+[project.optional-dependencies]
+dbt = ["dbt-duckdb>=1.9"]
+ml = ["fastembed>=0.7", "numpy>=2"]
+api = ["fastembed>=0.7", "numpy>=2", "fastapi>=0.115", "uvicorn>=0.32"]
+dev = ["dbt-duckdb>=1.9", "fastembed>=0.7", "numpy>=2", "fastapi>=0.115", "httpx>=0.28", "pytest>=8", "ruff>=0.8"]
+
+[project.scripts]
+gasto = "gasto_pipeline.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gasto_pipeline"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

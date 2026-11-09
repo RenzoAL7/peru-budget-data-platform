@@ -1,0 +1,21 @@
+version: 2
+models:
+  - name: fct_gasto
+    description: Gasto por anio, mes, entidad, funcion, generica, proyecto, region y fuente.
+    columns:
+      - name: ano
+        data_tests: [not_null]
+      - name: mes
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+                quote: false
+      - name: nivel
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [E, R, M]
+      - name: entidad_id
+        data_tests: [not_null]
