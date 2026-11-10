@@ -1,4 +1,4 @@
-import { entitySql, initConsole, showPreset, showSql, yearChanged } from "./console.js";
+import { entitySql, initConsole, query, showPreset, showSql, yearChanged } from "./console.js";
 
 const main = document.getElementById("contenido");
 const cache = new Map();
@@ -190,29 +190,116 @@ async function entity(id) {
 }
 
 /* ---------- Obras ---------- */
+const sqlText = (v) => `'${String(v).replace(/'/g, "''")}'`;
+const placeName = (e) => title(e.n.replace(/^MUNICIPALIDAD (DISTRITAL|PROVINCIAL) DE /, ""))
+  + (e.n.startsWith("MUNICIPALIDAD PROVINCIAL") ? " (provincial)" : "");
+
+/** Consulta de obras para el filtro elegido, ordenada de mas a menos dinero sin gastar. */
+function obrasSql(year, { dep, prov, dist }) {
+  const where = [`p.ano = ${year}`];
+  let scope = "todo el Perú";
+  if (dist) {
+    where.push(`p.entidad_id = ${sqlText(dist.id)}`);
+    scope = `la ${title(dist.n)}`;
+  } else if (prov) {
+    // Las obras no traen provincia: se usan las municipalidades de esa provincia.
+    where.push(`e.nivel = 'M'`, `e.departamento = ${sqlText(dep)}`, `e.provincia = ${sqlText(prov)}`);
+    scope = `las municipalidades de la provincia de ${title(prov)}`;
+  } else if (dep) {
+    where.push(`p.departamento = ${sqlText(dep)}`);
+    scope = `${title(dep)}, sumando gobierno nacional, regional y municipal`;
+  }
+  return `-- Obras de ${scope}, de más a menos dinero sin gastar.
+SELECT p.codigo, p.nombre, p.departamento AS dep,
+       p.pim, p.devengado AS dev, p.avance,
+       e.entidad_id AS id, e.nombre AS entidad
+FROM mart_proyecto p
+JOIN mart_entidad e USING (entidad_id)
+WHERE ${where.join("\n  AND ")}
+ORDER BY p.sin_ejecutar DESC
+LIMIT 50;`;
+}
+
 async function obras() {
-  const [list, meta] = await Promise.all([load("obras.json"), load("meta.json")]);
-  const deps = [...new Set(list.map((o) => o.dep).filter(Boolean))].sort();
+  const [list, meta, index] = await Promise.all([load("obras.json"), load("meta.json"), load("buscador.json")]);
+  const year = meta.ano_cerrado;
+  const munis = index.filter((e) => e.v === "M" && e.d && e.p);
+  const deps = [...new Set([...munis.map((e) => e.d), ...list.map((o) => o.dep).filter(Boolean)])].sort();
+  const options = (items, label, all) => `<option value="">${all}</option>` +
+    items.map(([value, text]) => `<option value="${esc(value)}">${esc(text)}</option>`).join("");
   main.innerHTML = `<h1>Obras que se quedaron con la plata sin gastar</h1>
-    <p class="lead">Proyectos con más dinero sin ejecutar en ${meta.ano_cerrado}.</p>
+    <p class="lead">Proyectos con más dinero sin ejecutar en ${year}, de más a menos.</p>
     <p class="note">Gastar poco no prueba corrupción. Una obra puede estar empezando, tener problemas técnicos o haber recibido fondos a fin de año. Es una señal para hacer preguntas.</p>
     <form id="buscar-obra" class="obra-search" role="search" hidden>
       <label class="sr" for="obra-q">Buscar obras</label>
       <input id="obra-q" type="search" maxlength="120" placeholder="Busca como hablas: posta médica, cancha de fútbol, pistas…">
     </form>
     <div class="filters">
-      <label>Departamento <select id="dep"><option value="">Todo el Perú</option>${deps.map((d) => `<option value="${esc(d)}">${esc(title(d))}</option>`).join("")}</select></label>
-      ${sqlButton("obras")}
+      <label>Departamento <select id="dep">${options(deps.map((d) => [d, title(d)]), "dep", "Todo el Perú")}</select></label>
+      <label>Provincia <select id="prov" disabled><option value="">Todas</option></select></label>
+      <label>Distrito <select id="dist" disabled><option value="">Todos</option></select></label>
+      <button type="button" class="sql-btn" id="obras-sql">Ver SQL</button>
     </div>
     <p class="sub" id="obra-estado" role="status"></p>
     <div id="lista"></div>`;
-  const draw = () => {
-    const d = document.getElementById("dep").value;
-    const box = document.getElementById("lista");
-    box.innerHTML = list.filter((o) => !d || o.dep === d).slice(0, 40).map((o) => obraCard(o, true)).join("");
-    paint(box);
+
+  const dep = document.getElementById("dep");
+  const prov = document.getElementById("prov");
+  const dist = document.getElementById("dist");
+  const status = document.getElementById("obra-estado");
+  const box = document.getElementById("lista");
+  const filter = () => ({
+    dep: dep.value,
+    prov: prov.value,
+    dist: munis.find((e) => e.id === dist.value) ?? null,
+  });
+  let ticket = 0;
+
+  const draw = async () => {
+    const f = filter();
+    const mine = ++ticket;
+    if (!f.dep) {
+      // Sin filtro: la lista nacional ya publicada, sin descargar el motor SQL.
+      box.innerHTML = list.slice(0, 40).map((o) => obraCard(o, true)).join("");
+      status.textContent = "";
+      paint(box);
+      return;
+    }
+    status.textContent = "Consultando las obras…";
+    box.setAttribute("aria-busy", "true");
+    try {
+      const rows = await query(obrasSql(year, f));
+      if (mine !== ticket) return;
+      box.innerHTML = rows.length
+        ? rows.map((o) => obraCard(o, true)).join("")
+        : `<p class="sub">No hay obras registradas en ${year} para este filtro.</p>`;
+      status.textContent = rows.length ? `${rows.length === 50 ? "Las 50" : rows.length} obras con más dinero sin gastar.` : "";
+      paint(box);
+    } catch (error) {
+      console.error(error);
+      if (mine === ticket) status.textContent = "No se pudo consultar las obras. Prueba de nuevo.";
+    } finally {
+      if (mine === ticket) box.removeAttribute("aria-busy");
+    }
   };
-  document.getElementById("dep").addEventListener("change", draw);
+
+  dep.addEventListener("change", () => {
+    const provs = [...new Set(munis.filter((e) => e.d === dep.value).map((e) => e.p))].sort();
+    prov.innerHTML = options(provs.map((p) => [p, title(p)]), "prov", "Todas");
+    prov.disabled = !dep.value;
+    dist.innerHTML = `<option value="">Todos</option>`;
+    dist.disabled = true;
+    draw();
+  });
+  prov.addEventListener("change", () => {
+    const dists = munis.filter((e) => e.d === dep.value && e.p === prov.value)
+      .sort((a, b) => placeName(a).localeCompare(placeName(b), "es"));
+    dist.innerHTML = options(dists.map((e) => [e.id, placeName(e)]), "dist", "Todos");
+    dist.disabled = !prov.value;
+    draw();
+  });
+  dist.addEventListener("change", draw);
+  document.getElementById("obras-sql").addEventListener("click", () => showSql(obrasSql(year, filter()), "mart_proyecto"));
   draw();
   wireObraSearch();
 }
