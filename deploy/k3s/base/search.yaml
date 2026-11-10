@@ -21,7 +21,7 @@ spec:
       labels: {app: gasto-search}
     spec:
       automountServiceAccountToken: false
-      securityContext: {runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000, seccompProfile: {type: RuntimeDefault}}
+      securityContext: {runAsNonRoot: true, runAsUser: 1000, fsGroup: 1000, seccompProfile: {type: RuntimeDefault}, seLinuxOptions: {level: "s0:c500,c501"}}
       initContainers:
         - name: pull-model
           image: ghcr.io/renzoal7/gasto-search:local

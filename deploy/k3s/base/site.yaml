@@ -21,7 +21,7 @@ spec:
       labels: {app: gasto-site}
     spec:
       automountServiceAccountToken: false
-      securityContext: {runAsNonRoot: true, runAsUser: 101, fsGroup: 101, seccompProfile: {type: RuntimeDefault}}
+      securityContext: {runAsNonRoot: true, runAsUser: 101, fsGroup: 101, seccompProfile: {type: RuntimeDefault}, seLinuxOptions: {level: "s0:c500,c501"}}
       containers:
         - name: nginx
           image: ghcr.io/renzoal7/gasto-site:local

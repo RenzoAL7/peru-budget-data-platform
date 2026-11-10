@@ -47,7 +47,12 @@ def step(task_id: str, *args: str, command: list[str] | None = None) -> Kubernet
         volumes=[VOLUME],
         volume_mounts=[MOUNT],
         container_resources=RESOURCES,
-        security_context=k8s.V1SecurityContext(
+        # El volumen se comparte entre pods: todos deben usar la misma etiqueta SELinux.
+        security_context=k8s.V1PodSecurityContext(
+            fs_group=1000,
+            se_linux_options=k8s.V1SELinuxOptions(level="s0:c500,c501"),
+        ),
+        container_security_context=k8s.V1SecurityContext(
             allow_privilege_escalation=False,
             run_as_non_root=True,
             capabilities=k8s.V1Capabilities(drop=["ALL"]),
