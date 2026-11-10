@@ -30,7 +30,9 @@ kubectl -n gasto-publico create secret generic airflow-env \
 
 ## Primera carga
 
-El histórico se carga una vez y se sube al bucket. Después, un pod puede ejecutar `gasto pull` para llenar el volumen del clúster.
+El histórico se procesa fuera del clúster y se sube al bucket. Los JSON, el índice y el modelo se copian al volumen `gasto-data`.
+
+No actives los DAGs mientras la VM tenga menos de 15 GB libres: cada CSV anual ocupa hasta 10 GB y llenar el disco afectaría a todo el clúster. Para que el DAG respalde en el bucket, agrega las claves S3 a `gasto-secrets`.
 
 La interfaz de Airflow no se expone a internet:
 

@@ -4,6 +4,17 @@ Plataforma de datos que convierte los archivos oficiales de gasto público del P
 
 Busca tu municipalidad, región o ministerio y mira cuánto dinero tuvo, cuánto gastó, en qué lo gastó y qué obras quedaron sin ejecutar.
 
+**Página en vivo:** http://193.122.221.201/presupuesto/
+
+| Métrica | Valor |
+|---|---|
+| Registros procesados | 150.4 millones |
+| Periodo | 2009 a 2026, 18 años |
+| CSV de origen | Más de 140 GB |
+| Parquet en bronze | 4.4 GB |
+| Entidades públicas | 2,154 |
+| Obras en el buscador | 110,645 |
+
 > *End-to-end data platform that ingests Peru's official public spending files (2009 to today), models them with dbt and DuckDB, orchestrates daily runs with Airflow on K3s, and serves a citizen-facing site from the cluster.*
 
 ## Arquitectura
@@ -33,7 +44,7 @@ flowchart LR
 | Lago | OCI Object Storage | `bronze/`, `silver/`, `gold/` y `models/` |
 | Transformación | dbt, DuckDB | Particiones por año, marts y pruebas de calidad |
 | Orquestación | Airflow 3.4, KubernetesPodOperator | Corrida diaria y revisión mensual del histórico |
-| Búsqueda | FastAPI, ONNX, modelo multilingüe | Encuentra "puesto de salud" al buscar "posta médica" |
+| Búsqueda | FastAPI, ONNX, modelo multilingüe | Busca por significado en 110,645 obras |
 | Publicación | Nginx, Traefik | Página estática en un pod del clúster |
 | Despliegue | GitHub Actions, GHCR, Argo CD | Imágenes multi-arquitectura fijadas por digest |
 
@@ -84,12 +95,13 @@ Problemas reales encontrados en las fuentes oficiales:
 - **2007 y 2008 usan otro clasificador** y no traen códigos de proyecto. El histórico comparable empieza en 2009.
 - **Registros con saltos de línea entre comillas.** La conversión usa un lector no paralelo y compara el conteo de filas contra el CSV.
 
-Como verificación externa, el presupuesto inicial calculado para 2014 (S/ 118,934 millones) y 2015 (S/ 130,621 millones) coincide con las leyes de presupuesto de esos años.
+Como verificación externa, el presupuesto inicial calculado para 2014 (S/ 118,934 millones), 2015 (S/ 130,621 millones), 2024 (S/ 240,806 millones) y 2025 (S/ 251,801 millones) coincide con las leyes de presupuesto de esos años.
 
 ## Limitaciones
 
 - El clúster tiene un solo nodo, así que una caída de la VM interrumpe la página y el buscador. El lago permanece en el bucket.
 - La página se sirve por HTTP porque aún no tiene dominio propio.
+- La VM tiene poco disco libre y cada CSV anual ocupa hasta 10 GB. Por eso la carga inicial se procesó fuera del clúster y los DAGs de Airflow están en pausa hasta ampliar el almacenamiento.
 - Un mes se considera con datos cuando el MEF ya lo publicó, por lo que el año en curso siempre es parcial.
 
 ## Decisiones de ingeniería
