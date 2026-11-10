@@ -38,15 +38,11 @@ const title = (s) => {
 function barRow(name, ratio, value, tip) {
   return `<li class="bar-row" tabindex="0" data-tip="${esc(tip)}">
     <span class="name">${name}</span>
-    <span class="track"><span class="fill" style="--w:${clampPct(ratio)}"></span></span>
+    <span class="track"><span class="fill" data-w="${clampPct(ratio)}"></span></span>
     <span class="val">${esc(value)}</span></li>`;
 }
 function paint(root = main) {
-  root.querySelectorAll("[style*='--w']").forEach((el) => {
-    const w = el.style.getPropertyValue("--w");
-    el.removeAttribute("style");
-    el.style.width = `${w}%`;
-  });
+  root.querySelectorAll("[data-w]").forEach((el) => { el.style.width = `${el.dataset.w}%`; });
   root.querySelectorAll("[data-h]").forEach((el) => { el.style.height = `${el.dataset.h}%`; });
 }
 
@@ -92,7 +88,7 @@ async function home() {
     <section>
       <p class="sub">En ${year}, el Estado peruano gastó</p>
       <p class="big">${esc(soles(total))}</p>
-      <h2 style="margin-top:26px">De cada S/ 100 que se gastaron</h2>
+      <h2 class="gap-top">De cada S/ 100 que se gastaron</h2>
       <p class="sub">Así se repartió el gasto de todo el Estado en ${year}.</p>
       <ul class="bars">${top.map((r) => {
         const share = r.dev / total;
@@ -134,7 +130,7 @@ function obraCard(o, withEntity) {
   const a = pct(o.dev, o.pim);
   return `<article class="obra"><h3>${esc(title(o.nombre))}</h3>
     <p>${withEntity ? `<a href="#/e/${esc(o.id)}">${esc(title(o.entidad))}</a> · ` : ""}${esc(title(o.dep ?? ""))}. Gastó ${esc(soles(o.dev))} de ${esc(soles(o.pim))} (${pctText(a)}).</p>
-    <span class="track" data-tip="Sin ejecutar: ${esc(soles(o.pim - o.dev))}"><span class="fill" style="--w:${clampPct(a)}"></span></span></article>`;
+    <span class="track" data-tip="Sin ejecutar: ${esc(soles(o.pim - o.dev))}"><span class="fill" data-w="${clampPct(a)}"></span></span></article>`;
 }
 
 async function entity(id) {
@@ -221,7 +217,7 @@ async function ranking() {
   const block = (rows, label) => `<div><h2>${label}</h2><ul class="bars">${rows.map((e) => barRow(`<a href="#/e/${esc(e.id)}">${esc(title(e.n))}</a>`, e.avance, pctText(e.avance), `Gastó ${soles(e.dev)} de ${soles(e.pim)}`)).join("")}</ul></div>`;
   main.innerHTML = `<h1>¿Quién dejó más presupuesto sin gastar?</h1>
     <p class="lead">Entidades con menor porcentaje de presupuesto ejecutado en ${meta.ano_cerrado}, entre las que tuvieron al menos S/ 1 millón.</p>
-    <section class="two" style="border:0;padding-top:0">${block(r.R, "Gobiernos regionales")}${block(r.E, "Gobierno nacional")}</section>
+    <section class="two flat">${block(r.R, "Gobiernos regionales")}${block(r.E, "Gobierno nacional")}</section>
     <section>${block(r.M, "Municipalidades")}</section>`;
   paint();
 }

@@ -52,7 +52,7 @@ section { padding-block: 34px; border-top: 1px solid var(--line); }
 .bar-row .name { font-size: 15px; overflow-wrap: anywhere; }
 .bar-row .val { text-align: right; font-variant-numeric: tabular-nums; font-size: 15px; }
 .track { display: block; height: 12px; border-radius: 0 4px 4px 0; background: var(--track); overflow: hidden; }
-.fill { display: block; height: 100%; background: var(--gastado); border-radius: 0 4px 4px 0; }
+.fill { display: block; width: 0; height: 100%; background: var(--gastado); border-radius: 0 4px 4px 0; }
 .plain { background: transparent; }
 .legend { display: flex; gap: 18px; font-size: 14px; color: var(--soft); margin: 0 0 14px; flex-wrap: wrap; }
 .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
@@ -73,6 +73,8 @@ td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; white-space:
 select { font: inherit; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--soft); background: var(--card); color: var(--ink); max-width: 100%; }
 label { font-size: 15px; color: var(--soft); }
 .note { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--falta); border-radius: 6px; padding: 12px 16px; font-size: 15px; margin: 18px 0; max-width: 46em; }
+.gap-top { margin-top: 26px; }
+.flat { border: 0; padding-top: 0; }
 .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 34px; }
 .crumb { font-size: 15px; color: var(--soft); margin-top: 24px; }
 .obra { padding: 14px 0; border-bottom: 1px solid var(--line); }
