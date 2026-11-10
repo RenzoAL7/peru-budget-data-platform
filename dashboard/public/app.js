@@ -233,7 +233,7 @@ async function datos() {
       <p class="sub">Algunos archivos oficiales están incompletos. Esos años no se suman en esta página para no mostrar totales falsos.</p>
       <div class="scroll"><table><thead><tr><th>Año</th><th class="n">Registros</th><th>Estado</th></tr></thead>
       <tbody>${meta.cobertura.map((c) => `<tr><td>${c.ano}</td><td class="n">${esc(whole.format(c.filas))}</td><td>${c.estado === "completo" ? "Completo" : "Archivo oficial incompleto"}</td></tr>`).join("")}</tbody></table></div></section>
-    <section><h2>Código abierto</h2><p>El pipeline y esta página están publicados en <a href="https://github.com/RenzoAL7/peru-budget-data-platform" rel="noopener">GitHub</a>.</p></section>`;
+    <section><h2>Código abierto</h2><p>El pipeline y esta página están publicados en <a href="https://github.com/RenzoAL7/peru-spend-tracker" rel="noopener">GitHub</a>.</p></section>`;
 }
 
 const tip = document.getElementById("tip");

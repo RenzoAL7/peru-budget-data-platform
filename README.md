@@ -1,6 +1,6 @@
-# Peru Budget Data Platform
+# Peru Spend Tracker
 
-Data platform that turns Peru's official public spending files into a website anyone can use: **Plata Pública Perú**.
+Data platform that turns Peru's official public spending files into a website anyone can use.
 
 Search for a municipality, region, or ministry and see how much money it had, how much it spent, what it spent it on, and which public works were left unfinished.
 

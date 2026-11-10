@@ -1,5 +1,5 @@
 [project]
-name = "peru-budget-data-platform"
+name = "peru-spend-tracker"
 version = "1.0.0"
 description = "Pipeline ELT de la ejecucion del gasto publico del Peru (MEF, 2009 a la actualidad)"
 readme = "README.md"

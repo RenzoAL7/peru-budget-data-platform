@@ -51,7 +51,7 @@ jobs:
                 curl -fsS http://127.0.0.1:8088/healthz && break
                 sleep 1
               done
-              curl -fsS http://127.0.0.1:8088/presupuesto/ | grep -q "Plata Pública"
+              curl -fsS http://127.0.0.1:8088/presupuesto/ | grep -q "Peru Spend Tracker"
               test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8088/presupuesto)" = 301
               docker rm -f site-check
               ;;
