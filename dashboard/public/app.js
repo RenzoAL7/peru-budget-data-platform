@@ -49,6 +49,9 @@ function paint(root = main) {
 const sqlButton = (preset) => `<button type="button" class="sql-btn" data-sql="${preset}">Ver SQL</button>`;
 const sectionHead = (heading, preset, id) => `<div class="sec-head"><h2${id ? ` id="${id}"` : ""}>${heading}</h2>${preset ? sqlButton(preset) : ""}</div>`;
 
+const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+  "septiembre", "octubre", "noviembre", "diciembre"];
+
 function closedYears(meta) {
   return meta.cobertura.filter((c) => c.estado === "completo" && c.ultimo_mes === 12)
     .map((c) => c.ano).sort((a, b) => b - a);
@@ -71,15 +74,25 @@ async function home() {
   const [meta, nacional, regiones, obras] = await Promise.all([
     load("meta.json"), load("nacional.json"), load("regiones.json"), load("obras.json"),
   ]);
-  const years = closedYears(meta).filter((y) => nacional[y]).slice(0, 5);
-  if (!years.includes(selectedYear)) selectedYear = meta.ano_cerrado;
+  // Todos los años, del mas reciente al mas antiguo. Los incompletos se muestran desactivados.
+  const coverage = [...meta.cobertura].sort((a, b) => b.ano - a.ano);
+  const usable = (c) => Boolean(nacional[c.ano]);
+  const running = (c) => c.ultimo_mes < 12;
+  if (!coverage.some((c) => c.ano === selectedYear && usable(c))) selectedYear = meta.ano_cerrado;
+  const chip = (c) => usable(c)
+    ? `<button type="button" class="chip" data-ano="${c.ano}" aria-pressed="false"${running(c) ? ` aria-label="${c.ano}, en curso hasta ${MONTHS[c.ultimo_mes - 1]}"` : ""}>${c.ano}${running(c) ? `<small>hasta ${MONTHS[c.ultimo_mes - 1].slice(0, 3)}.</small>` : ""}</button>`
+    : `<button type="button" class="chip" disabled title="Archivo oficial incompleto: no se suma" aria-label="${c.ano}, archivo oficial incompleto">${c.ano}<small>incompleto</small></button>`;
   const first = meta.cobertura[0]?.ano;
   const last = meta.cobertura.at(-1)?.ano;
   main.innerHTML = `
     <section class="hero" aria-labelledby="total">
       <div class="hero-meta">
         <p>${esc(one.format(meta.filas / 1e6))} M de registros oficiales · ${first}–${last}</p>
-        <div class="years-pick" role="group" aria-label="Elegir año">${years.map((y) => `<button type="button" class="chip" data-ano="${y}" aria-pressed="false">${y}</button>`).join("")}</div>
+      </div>
+      <div class="years">
+        <button type="button" class="years-arrow" data-dir="-1" aria-label="Años más recientes">‹</button>
+        <div class="years-pick" role="group" aria-label="Elegir año" tabindex="-1">${coverage.map(chip).join("")}</div>
+        <button type="button" class="years-arrow" data-dir="1" aria-label="Años anteriores">›</button>
       </div>
       <h1 class="total" id="total"></h1>
       <p class="lead" id="total-frase"></p>
@@ -103,17 +116,22 @@ async function home() {
 
   const draw = () => {
     const year = selectedYear;
+    const info = meta.cobertura.find((c) => c.ano === year);
+    const partial = info && info.ultimo_mes < 12;
     main.querySelectorAll("[data-ano]").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.ano === year)));
+    main.querySelector(`[data-ano="${year}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
     const rows = nacional[year] ?? [];
     const spent = rows.reduce((s, r) => s + r.dev, 0);
     const budget = rows.reduce((s, r) => s + r.pim, 0);
     const [, number, unit] = soles(spent).match(/^(S\/ [\d.,]+)\s*(.*)$/) ?? [, soles(spent), ""];
     document.getElementById("total").innerHTML = `${esc(number)} <small>${esc(unit)}</small>`;
-    document.getElementById("total-frase").textContent = `gastó el Estado peruano en ${year}: el ${pctText(ratio(spent, budget))} de su presupuesto.`;
+    document.getElementById("total-frase").textContent = partial
+      ? `gastó el Estado peruano en ${year} hasta ${MONTHS[info.ultimo_mes - 1]}: el ${pctText(ratio(spent, budget))} de su presupuesto del año, que aún está en curso.`
+      : `gastó el Estado peruano en ${year}: el ${pctText(ratio(spent, budget))} de su presupuesto.`;
     document.getElementById("kpis").innerHTML = `
-      <div class="kpi"><span>Presupuesto final</span><b>${esc(soles(budget))}</b></div>
-      <div class="kpi k-bar"><span>Gastado</span><b>${esc(soles(spent))}</b></div>
-      <div class="kpi k-accent"><span>Quedó sin gastar</span><b>${esc(soles(budget - spent))}</b></div>`;
+      <div class="kpi"><span>${partial ? "Presupuesto del año" : "Presupuesto final"}</span><b>${esc(soles(budget))}</b></div>
+      <div class="kpi k-bar"><span>${partial ? `Gastado hasta ${MONTHS[info.ultimo_mes - 1]}` : "Gastado"}</span><b>${esc(soles(spent))}</b></div>
+      <div class="kpi k-accent"><span>${partial ? "Falta gastar" : "Quedó sin gastar"}</span><b>${esc(soles(budget - spent))}</b></div>`;
 
     const top = rows.slice(0, 8);
     document.getElementById("fn-list").innerHTML = top.map((r) => `<li class="fn">
@@ -131,7 +149,18 @@ async function home() {
       <div class="dot-line"><span class="dot" data-x="${Math.max(0, Math.min(100, ((r.a * 100 - axisMin) / (100 - axisMin)) * 100))}"></span></div></li>`).join("");
     paint();
   };
-  main.querySelector(".years-pick").addEventListener("click", (ev) => {
+  const strip = main.querySelector(".years-pick");
+  const arrows = main.querySelectorAll(".years-arrow");
+  const syncArrows = () => {
+    arrows[0].disabled = strip.scrollLeft <= 1;
+    arrows[1].disabled = strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 1;
+  };
+  arrows.forEach((a) => a.addEventListener("click", () => {
+    strip.scrollBy({ left: +a.dataset.dir * strip.clientWidth * 0.8, behavior: "smooth" });
+  }));
+  strip.addEventListener("scroll", syncArrows, { passive: true });
+  addEventListener("resize", syncArrows);
+  strip.addEventListener("click", (ev) => {
     const button = ev.target.closest("[data-ano]");
     if (!button) return;
     selectedYear = +button.dataset.ano;
@@ -139,6 +168,7 @@ async function home() {
     yearChanged();
   });
   draw();
+  syncArrows();
 }
 
 /* ---------- Entidad ---------- */

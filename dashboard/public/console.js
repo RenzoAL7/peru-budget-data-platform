@@ -232,6 +232,7 @@ let cancelRun = null;
 
 export async function run() {
   if (state.running) return;
+  hasRun = true;
   const sql = ui.editor.value.trim();
   if (!sql) return;
   setRunning(true);
@@ -269,25 +270,61 @@ function load(sql, table, preset = "") {
   lineage(table);
 }
 
-/** Carga una consulta de ejemplo y la ejecuta. */
+const STORE_KEY = "pst-consola";
+const narrow = () => matchMedia("(max-width: 1020px)").matches;
+let hasRun = false;
+let opener = null;
+
+function remember(open) {
+  try { localStorage.setItem(STORE_KEY, open ? "abierta" : "cerrada"); } catch { /* sin almacenamiento */ }
+}
+
+/** Abre la consola. En celular se muestra a pantalla completa sobre la pagina. */
+export function openConsole({ runNow = !hasRun } = {}) {
+  if (!ui.aside) return;
+  if (ui.aside.hidden) opener = document.activeElement;
+  ui.aside.hidden = false;
+  document.body.classList.add("con-consola");
+  ui.toggle.setAttribute("aria-expanded", "true");
+  remember(true);
+  if (narrow()) {
+    document.body.classList.add("consola-movil");
+    ui.close.focus();
+  }
+  if (runNow) run();
+}
+
+export function closeConsole() {
+  if (!ui.aside) return;
+  ui.aside.hidden = true;
+  document.body.classList.remove("con-consola", "consola-movil");
+  ui.toggle.setAttribute("aria-expanded", "false");
+  remember(false);
+  (opener?.isConnected ? opener : ui.toggle).focus();
+  opener = null;
+}
+
+/** Carga una consulta de ejemplo, abre la consola y la ejecuta. */
 export function showPreset(id, year = yearOf()) {
   const preset = PRESETS.find((p) => p.id === id);
   if (!preset) return;
   load(preset.sql(year), preset.table, id);
   ui.table.value = "";
-  run();
-  if (matchMedia("(max-width: 1020px)").matches) ui.editor.scrollIntoView({ behavior: "smooth", block: "center" });
+  openConsole({ runNow: true });
 }
 
-/** Carga cualquier consulta y la ejecuta. */
+/** Carga cualquier consulta, abre la consola y la ejecuta. */
 export function showSql(sql, table) {
   load(sql, table);
-  run();
+  openConsole({ runNow: true });
 }
 
-/** Recarga el ejemplo activo cuando cambia el año elegido en la pagina. */
+/** Actualiza el ejemplo activo cuando cambia el año; solo lo ejecuta si la consola esta abierta. */
 export function yearChanged() {
-  if (state.preset === "funciones" || state.preset === "region" || state.preset === "obras") showPreset(state.preset);
+  const preset = PRESETS.find((p) => p.id === state.preset);
+  if (!preset || !["funciones", "region", "obras"].includes(preset.id)) return;
+  load(preset.sql(yearOf()), preset.table, preset.id);
+  if (!ui.aside.hidden) run();
 }
 
 export async function initConsole({ currentYear }) {
@@ -300,6 +337,15 @@ export async function initConsole({ currentYear }) {
   ui.result = el("resultado");
   ui.status = el("motor");
   ui.lineage = el("linaje");
+  ui.aside = el("consola");
+  ui.toggle = el("abrir-consola");
+  ui.close = el("cerrar-consola");
+
+  ui.toggle.addEventListener("click", () => (ui.aside.hidden ? openConsole() : closeConsole()));
+  ui.close.addEventListener("click", closeConsole);
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && document.body.classList.contains("consola-movil")) closeConsole();
+  });
 
   ui.presets.innerHTML = PRESETS.map((p) => `<button type="button" data-id="${p.id}" aria-pressed="false">${esc(p.label)}</button>`).join("");
   ui.presets.addEventListener("click", (ev) => {
@@ -332,9 +378,10 @@ export async function initConsole({ currentYear }) {
   ui.table.insertAdjacentHTML("beforeend", catalog.map((c) =>
     `<option value="${esc(c.tabla)}">${esc(c.tabla)} (${whole.format(c.filas)})</option>`).join(""));
 
-  // En pantallas anchas la consola se ve desde el inicio: se ejecuta el primer ejemplo.
-  // En moviles se espera a que la persona la use, para no descargar el motor sin necesidad.
-  const wide = matchMedia("(min-width: 1021px)").matches;
+  // La consola empieza cerrada y el motor no se descarga hasta abrirla. En pantallas anchas
+  // se recuerda si la persona la dejo abierta; en celular siempre empieza cerrada.
+  let saved = null;
+  try { saved = localStorage.getItem(STORE_KEY); } catch { /* sin almacenamiento */ }
   const saveData = navigator.connection?.saveData === true;
-  if (wide && !saveData) run();
+  if (saved === "abierta" && !narrow()) openConsole({ runNow: !saveData });
 }
