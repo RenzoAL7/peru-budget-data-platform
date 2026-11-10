@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import json
 import logging
+import shutil
 import time
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
@@ -22,7 +23,9 @@ BASE_URL = "https://fs.datosabiertos.mef.gob.pe/datastorefiles"
 SUFFIXES = ("Gasto-Mensual", "Gasto")
 CHUNK_SIZE = 8 * 1024 * 1024
 MAX_RETRIES = 8
-HEADERS = {"User-Agent": "observatorio-gasto-peru/1.0"}
+# Espacio que debe quedar libre tras la descarga, para Parquet, temporales y otras aplicaciones.
+MIN_FREE_BYTES = 5 * 1024**3
+HEADERS ={"User-Agent": "observatorio-gasto-peru/1.0"}
 
 
 class IngestError(RuntimeError):
@@ -75,12 +78,21 @@ def is_current(manifest_path: Path, remote: RemoteFile) -> bool:
     )
 
 
+def ensure_disk_space(path: Path, needed: int) -> None:
+    """Evita llenar el disco del nodo, que comparten todas las aplicaciones del cluster."""
+    free = shutil.disk_usage(path).free
+    if free < needed + MIN_FREE_BYTES:
+        raise IngestError(f"Espacio insuficiente en {path}: {free} bytes libres, se piden {needed}")
+
+
 def download(remote: RemoteFile, target: Path) -> None:
     """Descarga con reanudacion por rango y verifica el tamanio final."""
     if target.exists() and target.stat().st_size == remote.size:
         return
     target.parent.mkdir(parents=True, exist_ok=True)
     partial = target.with_suffix(".part")
+    downloaded = partial.stat().st_size if partial.exists() else 0
+    ensure_disk_space(target.parent, remote.size - downloaded)
     for attempt in range(1, MAX_RETRIES + 1):
         offset = partial.stat().st_size if partial.exists() else 0
         if offset > remote.size:
@@ -163,15 +175,18 @@ def ingest_year(year: int, settings: Settings, force: bool = False) -> Manifest 
     parquet_path = settings.bronze_dir / f"ano_eje={year}" / "data.parquet"
     started = time.monotonic()
     download(remote, csv_path)
-    validate_header(read_header(csv_path))
-
-    con = connect(settings)
     try:
-        rows = csv_to_parquet(con, csv_path, parquet_path, remote)
+        validate_header(read_header(csv_path))
+        con = connect(settings)
+        try:
+            rows = csv_to_parquet(con, csv_path, parquet_path, remote)
+        finally:
+            con.close()
+        expected = count_csv_rows(csv_path)
     finally:
-        con.close()
+        # Un CSV ocupa hasta 10 GB: no se conserva aunque la validacion falle.
+        csv_path.unlink(missing_ok=True)
 
-    expected = count_csv_rows(csv_path)
     if rows != expected:
         raise IngestError(f"{year}: {expected} filas en CSV y {rows} en Parquet")
     if rows == 0:
@@ -188,7 +203,6 @@ def ingest_year(year: int, settings: Settings, force: bool = False) -> Manifest 
     )
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(asdict(manifest), indent=2))
-    csv_path.unlink()
     log.info(
         "%s listo: %s filas, %.2f GB Parquet, %.0fs",
         year, f"{rows:,}", manifest.parquet_bytes / 1e9, time.monotonic() - started,

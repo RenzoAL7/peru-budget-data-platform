@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import threading
 
 import numpy as np
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
@@ -15,6 +16,7 @@ INDEX_PATH = os.getenv("INDEX_PATH", "/data/gold/search/index.npz")
 ORIGINS = [o for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o]
 TOKEN = os.getenv("SEARCH_TOKEN", "")
 state: dict = {}
+lock = threading.Lock()
 
 app = FastAPI(title="Busqueda de obras", docs_url=None, redoc_url=None)
 app.add_middleware(CORSMiddleware, allow_origins=ORIGINS, allow_methods=["GET"])
@@ -27,11 +29,24 @@ def require_token(x_search_token: str = Header(default="")) -> None:
 
 
 def ensure_loaded() -> dict:
-    if not state:
+    """Entrega una vista completa del indice y lee el nuevo cuando el pipeline lo publica."""
+    version = os.stat(INDEX_PATH).st_mtime_ns
+    current = state.get("index")
+    if current is not None and current["version"] == version:
+        return current
+    with lock:
+        current = state.get("index")
+        if current is not None and current["version"] == version:
+            return current
+        # Libera el indice anterior primero: dos a la vez arriesgan el limite de memoria del pod.
+        state.pop("index", None)
+        if "model" not in state:
+            state["model"] = load_model()
         with np.load(INDEX_PATH, allow_pickle=False) as data:
-            state.update({name: data[name] for name in data.files})
-        state["model"] = load_model()
-    return state
+            loaded = {name: data[name] for name in data.files}
+        loaded.update(model=state["model"], version=version)
+        state["index"] = loaded
+        return loaded
 
 
 def rank(embeddings: np.ndarray, query: np.ndarray, mask: np.ndarray, limit: int) -> np.ndarray:

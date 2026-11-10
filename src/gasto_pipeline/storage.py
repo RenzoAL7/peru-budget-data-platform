@@ -19,7 +19,11 @@ LAYERS = {
     "bronze": ("bronze", "*.parquet"),
     "silver": ("silver", "*.parquet"),
     "gold": ("gold", "*"),
+    # Sin los manifiestos, una restauracion volveria a descargar cada CSV del MEF.
+    "manifests": ("manifests", "*.json"),
 }
+# Estas capas cambian conservando el tamanio, asi que siempre se reemplazan.
+ALWAYS_REPLACED = {"gold", "manifests"}
 MODEL_KEY = "models/paraphrase-multilingual-MiniLM-L12-v2/model.tar.gz"
 
 
@@ -57,8 +61,7 @@ def push(settings: Settings, layers: list[str]) -> int:
         root = settings.data_dir / folder
         for path in sorted(p for p in root.rglob(pattern) if p.is_file()):
             key = f"{layer}/{path.relative_to(root).as_posix()}"
-            # El gold cambia con igual tamanio, asi que siempre se reemplaza.
-            if layer != "gold" and _same_size(client, key, path.stat().st_size):
+            if layer not in ALWAYS_REPLACED and _same_size(client, key, path.stat().st_size):
                 continue
             client.upload_file(str(path), _bucket(), key)
             sent += 1
@@ -66,7 +69,14 @@ def push(settings: Settings, layers: list[str]) -> int:
     return sent
 
 
-def pull(settings: Settings, layers: list[str]) -> int:
+def _is_synced(local: Path, size: int, layer: str, missing_only: bool) -> bool:
+    if not local.exists():
+        return False
+    return missing_only or (layer not in ALWAYS_REPLACED and local.stat().st_size == size)
+
+
+def pull(settings: Settings, layers: list[str], missing_only: bool = False) -> int:
+    """Descarga el lago. Con missing_only nunca reemplaza un archivo local."""
     client = _client()
     pages = client.get_paginator("list_objects_v2")
     got = 0
@@ -76,7 +86,7 @@ def pull(settings: Settings, layers: list[str]) -> int:
         for page in pages.paginate(Bucket=_bucket(), Prefix=f"{layer}/"):
             for item in page.get("Contents", []):
                 local = root / item["Key"].removeprefix(f"{layer}/")
-                if local.exists() and local.stat().st_size == item["Size"] and layer != "gold":
+                if _is_synced(local, item["Size"], layer, missing_only):
                     continue
                 local.parent.mkdir(parents=True, exist_ok=True)
                 client.download_file(_bucket(), item["Key"], str(local))

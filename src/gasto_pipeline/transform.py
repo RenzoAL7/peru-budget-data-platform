@@ -28,6 +28,15 @@ def _dbt(settings: Settings, select: str, year: int | None = None) -> None:
     subprocess.run(command, check=True, env=env, cwd=DBT_DIR)
 
 
+def silver_file(settings: Settings, year: int) -> Path:
+    return settings.data_dir / "silver" / "fct_gasto" / f"ano_eje={year}" / "data.parquet"
+
+
+def pending_marker(settings: Settings, year: int) -> Path:
+    """Existe mientras la particion del anio no haya pasado sus pruebas."""
+    return silver_file(settings, year).with_name(".pendiente")
+
+
 def build_silver(year: int, settings: Settings) -> None:
     """Reconstruye y prueba solo la particion del anio indicado."""
     settings.tmp_dir.mkdir(parents=True, exist_ok=True)
@@ -36,7 +45,11 @@ def build_silver(year: int, settings: Settings) -> None:
             parents=True, exist_ok=True
         )
     log.info("Construyendo silver de %s", year)
+    # dbt escribe el Parquet antes de probarlo. La marca sobrevive a un fallo o a un pod terminado.
+    marker = pending_marker(settings, year)
+    marker.touch()
     _dbt(settings, "tag:silver", year)
+    marker.unlink()
 
 
 def build_gold(settings: Settings) -> None:
@@ -69,11 +82,20 @@ def bronze_years(settings: Settings) -> list[int]:
 
 
 def changed_years(settings: Settings) -> list[int]:
-    """Anios cuyo bronze es mas reciente que su particion silver."""
+    """Anios con bronze mas reciente que silver o con una particion sin validar."""
     changed = []
     for year in bronze_years(settings):
         bronze = settings.bronze_dir / f"ano_eje={year}" / "data.parquet"
-        silver = settings.data_dir / "silver" / "fct_gasto" / f"ano_eje={year}" / "data.parquet"
-        if not silver.exists() or bronze.stat().st_mtime > silver.stat().st_mtime:
+        silver = silver_file(settings, year)
+        if (
+            not silver.exists()
+            or pending_marker(settings, year).exists()
+            or bronze.stat().st_mtime > silver.stat().st_mtime
+        ):
             changed.append(year)
     return changed
+
+
+def missing_history(settings: Settings) -> list[int]:
+    """Anios cerrados sin silver. El anio en curso puede no existir aun en enero."""
+    return [year for year in settings.years()[:-1] if not silver_file(settings, year).exists()]
