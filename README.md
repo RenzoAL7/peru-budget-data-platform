@@ -1,118 +1,122 @@
 # Peru Budget Data Platform
 
-Plataforma de datos que convierte los archivos oficiales de gasto público del Perú en una página que cualquier persona puede consultar: **Plata Pública Perú**.
+Data platform that turns Peru's official public spending files into a website anyone can use: **Plata Pública Perú**.
 
-Busca tu municipalidad, región o ministerio y mira cuánto dinero tuvo, cuánto gastó, en qué lo gastó y qué obras quedaron sin ejecutar.
+Search for a municipality, region, or ministry and see how much money it had, how much it spent, what it spent it on, and which public works were left unfinished.
 
-**Página en vivo:** http://193.122.221.201/presupuesto/
+**Live site:** http://193.122.221.201/presupuesto/
 
-| Métrica | Valor |
+| Metric | Value |
 |---|---|
-| Registros procesados | 150.4 millones |
-| Periodo | 2009 a 2026, 18 años |
-| CSV de origen | Más de 140 GB |
-| Parquet en bronze | 4.4 GB |
-| Entidades públicas | 2,154 |
-| Obras en el buscador | 110,645 |
+| Records processed | 150.4 million |
+| Period | 2009 to 2026, 18 years |
+| Source CSV | More than 140 GB |
+| Parquet in bronze | 4.4 GB |
+| Public entities | 2,154 |
+| Public works in search | 110,645 |
 
-> *End-to-end data platform that ingests Peru's official public spending files (2009 to today), models them with dbt and DuckDB, orchestrates daily runs with Airflow on K3s, and serves a citizen-facing site from the cluster.*
+## Highlights
 
-## Arquitectura
+- Built an end-to-end ELT pipeline in Python and SQL that processes 150.4M official spending records from Peru's Ministry of Economy and Finance (2009–2026), reducing 140+ GB of CSV to 4.4 GB of Parquet and serving 2,154 public entities through a public website.
+- Modeled a medallion warehouse on DuckDB with 10 dbt models and SQL data-quality tests, using OCI Object Storage as the data lake; added schema contracts plus row-count and financial reconciliation, which flagged truncated official files for 2016–2017 and matched enacted budget laws for 2014, 2015, 2024, and 2025.
+- Orchestrated incremental loads with Apache Airflow on K3s, with task dependencies, retries, and stage-level recovery; shipped multi-architecture images through GitHub Actions and Argo CD, and added semantic search across 110,645 public works using a multilingual ONNX model.
+
+## Architecture
 
 ```mermaid
 flowchart LR
-    MEF[CSV oficiales del MEF] --> Bronze
-    subgraph k3s[K3s en OCI · pods orquestados por Airflow]
-      Bronze[Ingesta a Parquet] --> Silver[dbt + DuckDB: silver]
+    MEF[Official MEF CSV files] --> Bronze
+    subgraph k3s[K3s on OCI · pods orchestrated by Airflow]
+      Bronze[Parquet ingestion] --> Silver[dbt + DuckDB: silver]
       Silver --> Gold[dbt: marts]
-      Gold --> Index[Índice semántico]
-      Search[Pod API de búsqueda]
+      Gold --> Index[Semantic index]
+      Search[Search API pod]
     end
     Bronze & Silver & Gold <--> OCI[(OCI Object Storage)]
-    OCI -- modelo preentrenado --> Search
+    OCI -- pretrained model --> Search
     Index --> Search
-    Gold --> Site[Pod Nginx]
+    Gold --> Site[Nginx pod]
     Site -. proxy .-> Search
-    Usuario((Público)) --> Traefik --> Site
+    User((Public)) --> Traefik --> Site
     Git[GitHub Actions] --> GHCR[(GHCR)]
     GHCR --> Argo[Argo CD] --> k3s
 ```
 
-| Capa | Herramientas | Responsabilidad |
+| Layer | Tools | Responsibility |
 |---|---|---|
-| Ingesta | Python, DuckDB | Descarga reanudable, contrato de columnas, conteo CSV contra Parquet |
-| Lago | OCI Object Storage | `bronze/`, `silver/`, `gold/` y `models/` |
-| Transformación | dbt, DuckDB | Particiones por año, marts y pruebas de calidad |
-| Orquestación | Airflow 3.4, KubernetesPodOperator | Corrida diaria y revisión mensual del histórico |
-| Búsqueda | FastAPI, ONNX, modelo multilingüe | Busca por significado en 110,645 obras |
-| Publicación | Nginx, Traefik | Página estática en un pod del clúster |
-| Despliegue | GitHub Actions, GHCR, Argo CD | Imágenes multi-arquitectura fijadas por digest |
+| Ingestion | Python, DuckDB | Resumable downloads, column contract, CSV-to-Parquet row counts |
+| Data lake | OCI Object Storage | `bronze/`, `silver/`, `gold/`, and `models/` |
+| Transformation | dbt, DuckDB | Yearly partitions, marts, and quality tests |
+| Orchestration | Airflow 3.4, KubernetesPodOperator | Daily runs and a monthly review of the full history |
+| Search | FastAPI, ONNX, multilingual model | Searches 110,645 public works by meaning |
+| Publishing | Nginx, Traefik | Static website in a cluster pod |
+| Deployment | GitHub Actions, GHCR, Argo CD | Multi-architecture images pinned by digest |
 
-## Modelo de IA
+## AI model
 
-El buscador de obras usa un modelo preentrenado multilingüe: [`paraphrase-multilingual-MiniLM-L12-v2`](https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2), en formato ONNX cuantizado.
+The public works search uses a pretrained multilingual model: [`paraphrase-multilingual-MiniLM-L12-v2`](https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2), in quantized ONNX format.
 
-- **Qué hace:** convierte el nombre de cada obra en un vector de 384 dimensiones. Así, "posta médica" encuentra "puesto de salud" aunque las palabras no coincidan.
-- **Dónde corre:** en un pod con FastAPI y solo CPU, compatible con ARM64. No usa GPU ni servicios de pago.
-- **Cómo se distribuye:** el paquete de 221 MB vive en el bucket. El pod lo descarga al iniciar y verifica su SHA-256, lo que mantiene ligera la imagen Docker.
-- **Evaluación:** en 10 consultas de ejemplo, la relevancia de los 10 primeros resultados subió de 44% a 94% al pasar los textos a minúsculas y quitar la ubicación. Es una prueba pequeña, medida con palabras clave.
-- **Descartado:** un clasificador de obras por tema con este modelo coincidió solo 52% con la clasificación oficial, que además ya existe. No llegó a producción.
+- **What it does:** converts each project name into a 384-dimension vector, so "posta médica" (clinic) finds "puesto de salud" (health post) even though the words differ.
+- **Where it runs:** in a CPU-only FastAPI pod that is ARM64-compatible, with no GPU or paid services.
+- **How it is distributed:** the 221 MB package lives in the bucket. The pod downloads it at startup and verifies its SHA-256, which keeps the Docker image small.
+- **Evaluation:** across 10 sample queries, top-10 relevance rose from 44% to 94% after lowercasing the text and removing locations. This is a small test, measured with keywords.
+- **Discarded:** a topic classifier built with this model matched the official classification only 52% of the time, and that classification already exists. It did not reach production.
 
-El modelo no genera texto: solo ordena obras por parecido.
+The model does not generate text. It only ranks public works by similarity.
 
-## Modelos de datos
+## Data models
 
-Arquitectura medallion con 10 modelos dbt sobre DuckDB.
+A medallion architecture with 10 dbt models on DuckDB.
 
-| Capa | Modelo | Contenido |
+| Layer | Model | Content |
 |---|---|---|
-| Silver | `stg_gasto` | Tipos, limpieza y marca de filas inválidas |
-| Silver | `fct_gasto` | Gasto por año, mes, entidad, función, genérica, proyecto, región y fuente |
-| Silver | `fct_cobertura` | Evidencia de completitud del archivo de cada año |
-| Gold | `mart_cobertura` | Clasifica cada año como completo o incompleto |
-| Gold | `mart_entidad` | Directorio de entidades para el buscador |
-| Gold | `mart_entidad_anual` | Presupuesto y ejecución por entidad y año |
-| Gold | `mart_entidad_funcion` | En qué gastó cada entidad |
-| Gold | `mart_proyecto` | Presupuesto frente a ejecución por obra |
-| Gold | `mart_region_anual` | Gasto dentro de cada departamento |
-| Gold | `mart_nacional_funcion` | Distribución nacional del gasto |
+| Silver | `stg_gasto` | Types, cleaning, and invalid-row flags |
+| Silver | `fct_gasto` | Spending by year, month, entity, function, generic category, project, region, and funding source |
+| Silver | `fct_cobertura` | Evidence of how complete each year's file is |
+| Gold | `mart_cobertura` | Classifies each year as complete or incomplete |
+| Gold | `mart_entidad` | Entity directory for the search box |
+| Gold | `mart_entidad_anual` | Budget and execution by entity and year |
+| Gold | `mart_entidad_funcion` | What each entity spent on |
+| Gold | `mart_proyecto` | Budget versus execution for each public work |
+| Gold | `mart_region_anual` | Spending within each department |
+| Gold | `mart_nacional_funcion` | National spending distribution |
 
-El bucket privado de OCI Object Storage se organiza así:
+The private OCI Object Storage bucket is organized as follows:
 
 ```text
 gasto-publico-peru/
-├── bronze/   Parquet sin tipar, tal como lo publica el MEF
-├── silver/   Hechos tipados y evidencia de cobertura, por año
-├── gold/     Marts en Parquet e índice de búsqueda
-└── models/   Modelo preentrenado
+├── bronze/   Untyped Parquet, exactly as published by the ministry
+├── silver/   Typed facts and coverage evidence, by year
+├── gold/     Marts in Parquet and the search index
+└── models/   Pretrained model
 ```
 
-## Calidad de los datos
+## Data quality
 
-Problemas reales encontrados en las fuentes oficiales:
+Real problems found in the official sources:
 
-- **2016 y 2017 están truncados.** Los archivos no incluyen el gobierno nacional y su última fila está cortada. Se conservan en el lago, pero la página no los suma ni los compara.
-- **2007 y 2008 usan otro clasificador** y no traen códigos de proyecto. El histórico comparable empieza en 2009.
-- **Registros con saltos de línea entre comillas.** La conversión usa un lector no paralelo y compara el conteo de filas contra el CSV.
+- **2016 and 2017 are truncated.** The files omit the national government and their last row is cut off. They remain in the lake, but the website does not add them up or compare them.
+- **2007 and 2008 use a different classifier** and have no project codes. Comparable history starts in 2009.
+- **Records contain line breaks inside quotes.** The conversion uses a non-parallel reader and compares the row count against the CSV.
 
-Como verificación externa, el presupuesto inicial calculado para 2014 (S/ 118,934 millones), 2015 (S/ 130,621 millones), 2024 (S/ 240,806 millones) y 2025 (S/ 251,801 millones) coincide con las leyes de presupuesto de esos años.
+As an external check, the initial budget calculated for 2014 (S/ 118,934 million), 2015 (S/ 130,621 million), 2024 (S/ 240,806 million), and 2025 (S/ 251,801 million) matches the budget laws for those years.
 
-## Limitaciones
+## Limitations
 
-- El clúster tiene un solo nodo, así que una caída de la VM interrumpe la página y el buscador. El lago permanece en el bucket.
-- La página se sirve por HTTP porque aún no tiene dominio propio.
-- La VM tiene poco disco libre y cada CSV anual ocupa hasta 10 GB. Por eso la carga inicial se procesó fuera del clúster y los DAGs de Airflow están en pausa hasta ampliar el almacenamiento.
-- Un mes se considera con datos cuando el MEF ya lo publicó, por lo que el año en curso siempre es parcial.
+- The cluster has a single node, so a VM outage takes down the website and search. The lake remains in the bucket.
+- The website is served over HTTP because it does not have its own domain yet.
+- The VM has little free disk space and each yearly CSV takes up to 10 GB. For that reason, the initial load was processed outside the cluster and the Airflow DAGs are paused until storage is expanded.
+- A month counts as having data once the ministry has published it, so the current year is always partial.
 
-## Decisiones de ingeniería
+## Engineering decisions
 
-- **Los años incompletos no se suman.** `mart_cobertura` exige los tres niveles de gobierno y excluye de los totales los años que no los tienen.
-- **Conciliación financiera.** Una prueba de dbt falla si la agregación crea o pierde un solo sol respecto al origen.
-- **Bronze inmutable y sin tipar.** El dato se guarda tal como llegó. Los tipos se aplican en silver.
-- **Reprocesamiento incremental.** Solo se recalculan los años cuyo archivo cambió.
-- **Despliegue GitOps sin acceso a la VM.** El clúster es privado: Argo CD trae los cambios desde Git y CI nunca recibe credenciales de OCI.
+- **Incomplete years are not added up.** `mart_cobertura` requires all three levels of government and excludes years without them from totals.
+- **Financial reconciliation.** A dbt test fails if aggregation creates or loses a single sol compared with the source.
+- **Untyped bronze.** Data is stored as it arrived, and types are applied in silver. When the ministry republishes a year, the new file replaces the previous version.
+- **Incremental reprocessing.** Only years whose file changed are recalculated.
+- **GitOps deployment without VM access.** The cluster is private: Argo CD pulls changes from Git and CI never receives OCI credentials.
 
-## Ejecutar en local
+## Run locally
 
 ```bash
 cp .env.example .env
@@ -124,12 +128,12 @@ gasto transform
 gasto publish
 ```
 
-La guía de producción está en [docs/deployment.md](docs/deployment.md).
+The production guide is in [docs/deployment.md](docs/deployment.md), written in Spanish.
 
-## Interpretación responsable
+## Responsible interpretation
 
-Un porcentaje bajo de ejecución no prueba corrupción. Una obra puede estar empezando, tener problemas técnicos o haber recibido fondos a fin de año. Este es un proyecto independiente y no es un sitio oficial del Estado. Los datos provienen de [Datos Abiertos del MEF](https://datosabiertos.mef.gob.pe/).
+A low execution rate does not prove corruption. A public work may be just starting, have technical problems, or have received funds at the end of the year. This is an independent project and not an official government website. The data comes from [Datos Abiertos del MEF](https://datosabiertos.mef.gob.pe/).
 
-## Licencia
+## License
 
-Código bajo [licencia MIT](LICENSE).
+Code released under the [MIT License](LICENSE).
