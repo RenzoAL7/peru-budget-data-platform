@@ -2,10 +2,12 @@
 
 ## Flujo
 
-1. Un push a `main` ejecuta CI y publica las imágenes `pipeline`, `search` y `airflow` en GHCR para ARM64 y AMD64.
+1. Un push a `main` ejecuta CI y publica las imágenes `pipeline`, `search`, `airflow` y `site` en GHCR para ARM64 y AMD64.
 2. El workflow guarda el digest de cada imagen.
-3. Una Pull Request en `RenzoAL7/K3s-Cortex` copia `deploy/k3s` a `apps/peru-budget-data-platform` y fija esos digests.
-4. Argo CD aplica el cambio. Para revertir, se restaura el digest anterior en Git.
+3. El job `promote` ejecuta `scripts/promote.py`, que copia `deploy/k3s` a `apps/peru-budget-data-platform` en `RenzoAL7/K3s-Cortex` y fija los cuatro digests en ambos perfiles. Luego abre o actualiza la PR `automation/peru-spend-tracker-prod`. Nunca la fusiona.
+4. Al fusionar esa PR, Argo CD aplica el cambio. Para revertir, se revierte ese commit en K3s-Cortex.
+
+El job necesita el secreto `CORTEX_REPO_TOKEN` en este repositorio: un token con permiso de escritura de contenido y de Pull Requests sobre `RenzoAL7/K3s-Cortex`. Puede ser el mismo que usa GPath.
 
 Hay dos perfiles: `overlays/2ocpu` para la VM actual y `overlays/4ocpu` para cuando tenga 4 OCPU y 24 GB.
 
@@ -48,7 +50,22 @@ kubectl -n gasto-publico port-forward svc/airflow-api 8080:8080
 
 ## Acceso público
 
-La página se sirve por HTTP en `/presupuesto/` de la IP del balanceador, mediante Traefik y un pod Nginx. Las rutas `/` de TerraDock y por host de GPath no cambian.
+La página se publica en `https://peru-spend-tracker.renzoaguilar.dev`. Cloudflare administra el DNS y el certificado público, y Traefik envía ese host al pod Nginx, que sirve el sitio en `/`. La IP del balanceador sigue sirviendo la página en `/presupuesto/`. Las rutas `/` de TerraDock y por host de GPath no cambian.
+
+El registro DNS es un `A` llamado `peru-spend-tracker` que apunta a la IP del balanceador, con el proxy de Cloudflare activado.
+
+Para cifrar también el tramo entre Cloudflare y la VM:
+
+1. En Cloudflare, ve a **SSL/TLS › Origin Server › Create Certificate** y crea un certificado para `renzoaguilar.dev` y `*.renzoaguilar.dev`. Guarda el certificado como `origen.pem` y la clave como `origen.key`. La clave solo se muestra una vez.
+2. Crea el secreto en el clúster:
+
+   ```bash
+   kubectl -n gasto-publico create secret tls peru-spend-tracker-origen --cert=origen.pem --key=origen.key
+   ```
+
+3. Cuando el sitio responda por HTTPS, cambia en Cloudflare **SSL/TLS › Overview** al modo **Full (strict)**.
+
+Mientras el modo sea **Flexible**, Cloudflare llega a la VM por HTTP y el Ingress `gasto-site-dominio` atiende la petición. Con **Full (strict)** la atiende `gasto-site-dominio-tls`, que usa el certificado de origen.
 
 ## Búsqueda semántica
 
