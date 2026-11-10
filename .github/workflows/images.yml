@@ -25,8 +25,9 @@ concurrency:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # La VM del clúster es ARM64: se construye solo esa arquitectura, en un runner ARM nativo.
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
@@ -36,11 +37,21 @@ jobs:
         image: [pipeline, search, airflow, site]
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
-      - name: Construir y probar en amd64
+      - name: Construir
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/${{ matrix.image }}.Dockerfile
+          platforms: linux/arm64
+          build-args: VCS_REF=${{ github.sha }}
+          load: true
+          tags: check:${{ matrix.image }}
+          # Capas reutilizadas entre ejecuciones: solo se reconstruye lo que cambio.
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,scope=${{ matrix.image }},mode=max
+      - name: Probar
         run: |
-          docker build -f docker/${{ matrix.image }}.Dockerfile --build-arg VCS_REF="$GITHUB_SHA" -t check:${{ matrix.image }} .
           case "${{ matrix.image }}" in
             pipeline) docker run --rm check:pipeline gasto --help ;;
             search) docker run --rm check:search python -c "import app" ;;
@@ -80,8 +91,10 @@ jobs:
         with:
           context: .
           file: docker/${{ matrix.image }}.Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/arm64
           build-args: VCS_REF=${{ github.sha }}
+          # Reusa las capas de "Construir": publica la misma imagen que se probo.
+          cache-from: type=gha,scope=${{ matrix.image }}
           push: true
           tags: ghcr.io/renzoal7/gasto-${{ matrix.image }}:sha-${{ github.sha }}
           provenance: true

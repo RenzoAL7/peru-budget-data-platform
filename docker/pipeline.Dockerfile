@@ -4,14 +4,10 @@ WORKDIR /app
 
 FROM base AS pipeline
 ARG VCS_REF=dev
-RUN apt-get update && apt-get install -y --no-install-recommends nodejs npm \
-    && npm install -g wrangler@4 \
-    && apt-get purge -y npm && rm -rf /var/lib/apt/lists/*
 COPY pyproject.toml README.md ./
 COPY src ./src
 RUN pip install ".[dbt,ml]"
 COPY dbt ./dbt
-COPY dashboard ./dashboard
 COPY scripts ./scripts
 RUN useradd --uid 1000 --create-home gasto && mkdir -p /data && chown gasto /data
 ENV DATA_DIR=/data DBT_PROJECT_DIR=/app/dbt HOME=/home/gasto \
