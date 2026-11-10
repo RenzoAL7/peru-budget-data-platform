@@ -45,6 +45,9 @@ button:hover { filter: brightness(1.08); }
 /* Estructura: pagina a la izquierda, consola a la derecha; en pantallas angostas, la consola baja. */
 .shell { display: flex; flex-wrap: wrap; align-items: stretch; min-height: 100vh; }
 .page { flex: 999 1 560px; min-width: 0; padding: 0 clamp(16px, 3.6vw, 48px) 40px; }
+/* Con la consola cerrada, el contenido no se estira de borde a borde en pantallas grandes. */
+body:not(.con-consola) .page { max-width: 1240px; margin-inline: auto; }
+.console[hidden] { display: none; }
 .console { flex: 1 1 460px; min-width: 0; max-width: 100%; background: var(--console-bg); border-left: 1px solid var(--console-edge); color: var(--c-ink); font: 13px/1.5 var(--mono); }
 .console-inner { position: sticky; top: 0; display: flex; flex-direction: column; gap: 12px; padding: 18px 20px 20px; max-height: 100vh; overflow-y: auto; }
 
@@ -64,6 +67,9 @@ nav a[aria-current] { color: var(--ink); text-decoration: underline; text-decora
 .hits a { display: block; min-height: 44px; padding: 8px 12px; border-bottom: 1px solid var(--soft); color: var(--ink); font-size: 14px; text-decoration: none; }
 .hits a:hover, .hits a:focus, .hits a[aria-selected="true"] { background: var(--soft); outline: none; }
 .hits small { color: var(--muted); }
+.sql-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border: 1px solid var(--field-line); border-radius: 2px; background: var(--field); color: var(--link); font: 500 13px var(--mono); }
+.sql-toggle[aria-expanded="true"] { background: var(--console-bg); border-color: var(--console-bg); color: var(--c-gold); }
+.sql-toggle svg, .close svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .theme { display: flex; border: 1px solid var(--field-line); border-radius: 2px; overflow: hidden; }
 .theme button { display: inline-flex; align-items: center; gap: 6px; min-height: 42px; padding: 0 12px; border: 0; background: var(--field); color: var(--ink); font-size: 14px; font-weight: 500; }
 .theme button + button { border-left: 1px solid var(--field-line); }
@@ -89,9 +95,19 @@ section { padding: 30px 0; border-top: 1px solid var(--line); }
 .hero { padding: 40px 0 32px; border: 0; }
 .hero-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; }
 .hero-meta p { margin: 0; color: var(--muted); font: 13px var(--mono); }
-.years-pick { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { min-width: 60px; min-height: 44px; padding: 0 10px; border: 1px solid var(--field-line); border-radius: 2px; background: var(--field); color: var(--ink); font: 500 14px var(--mono); }
+/* Tira de años con desplazamiento horizontal: rueda, arrastre en el celular o flechas. */
+.years { display: flex; align-items: center; gap: 6px; margin-top: 14px; }
+.years-pick { display: flex; flex: 1 1 auto; gap: 6px; min-width: 0; padding-bottom: 8px; overflow-x: auto; scroll-snap-type: x proximity; scroll-padding-inline: 4px; scrollbar-width: thin; scrollbar-color: var(--field-line) transparent; overscroll-behavior-x: contain; }
+.years-pick::-webkit-scrollbar { height: 6px; }
+.years-pick::-webkit-scrollbar-thumb { background: var(--field-line); border-radius: 3px; }
+.years-arrow { flex: none; width: 36px; min-height: 44px; margin-bottom: 8px; border: 1px solid var(--field-line); border-radius: 2px; background: var(--field); color: var(--ink); font: 600 20px/1 var(--sans); }
+.years-arrow:disabled { opacity: .35; cursor: default; }
+.chip { flex: none; display: inline-flex; flex-direction: column; align-items: center; justify-content: center; min-width: 64px; min-height: 44px; padding: 2px 10px; border: 1px solid var(--field-line); border-radius: 2px; background: var(--field); color: var(--ink); font: 500 14px var(--mono); scroll-snap-align: start; }
+.chip small { font-size: 10px; font-weight: 400; line-height: 1.1; color: var(--muted); }
 .chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.chip[aria-pressed="true"] small { color: var(--bg); }
+.chip:disabled { opacity: .45; cursor: not-allowed; text-decoration: line-through; }
+.chip:disabled small { text-decoration: none; }
 .total { margin: 26px 0 0; font-size: clamp(50px, 7vw, 98px); font-weight: 800; line-height: .98; letter-spacing: -.035em; }
 .total small { font-size: .42em; font-weight: 600; letter-spacing: -.01em; white-space: nowrap; }
 .kpis { display: flex; flex-wrap: wrap; gap: 20px 32px; margin-top: 30px; }
@@ -160,6 +176,8 @@ td.n, th.n { text-align: right; font-family: var(--mono); font-size: 14px; white
 /* Consola SQL: siempre oscura, en ambos temas */
 .console-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; }
 .console h2 { font: 600 18px var(--mono); letter-spacing: 0; }
+.console-links { display: inline-flex; align-items: center; gap: 8px; }
+.close { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 1px solid var(--c-line); border-radius: 2px; background: transparent; color: var(--c-ink); }
 .console a { display: inline-flex; align-items: center; min-height: 44px; color: var(--c-gold); }
 .console-sub { margin: 0; color: var(--c-muted); }
 .console-head + .console-sub { margin-top: -8px; }
@@ -188,13 +206,40 @@ td.n, th.n { text-align: right; font-family: var(--mono); font-size: 14px; white
 .lineage li:last-child { color: var(--c-gold); }
 .fine { margin: 10px 0 0; color: var(--c-muted); font-size: 12px; }
 
+/* Tablet y celular: la consola se abre a pantalla completa sobre la pagina. */
 @media (max-width: 1020px) {
-  .console { border-left: 0; border-top: 1px solid var(--console-edge); }
-  .console-inner { position: static; max-height: none; }
+  .console { position: fixed; inset: 0; z-index: 20; border: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .console-inner { position: static; max-height: none; padding: 14px 16px calc(24px + env(safe-area-inset-bottom)); }
+  body.consola-movil { overflow: hidden; }
+  body:not(.con-consola) .page, .page { max-width: none; }
+  #editor { height: 170px; }
+  .grid-wrap { max-height: 50vh; }
 }
-@media (max-width: 560px) {
-  .search { max-width: none; }
-  .tools { justify-content: flex-start; }
+@media (max-width: 720px) {
+  .top { gap: 10px 12px; padding: 12px 0; }
+  .brand { font-size: 18px; }
+  /* Menu en una fila deslizable, sin romper la cabecera en varias lineas. */
+  nav { order: 3; flex: 1 1 100%; flex-wrap: nowrap; gap: 18px; overflow-x: auto; scrollbar-width: none; margin-inline: -4px; padding-inline: 4px; }
+  nav::-webkit-scrollbar { display: none; }
+  nav a { flex: none; }
+  .tools { order: 2; flex: 1 1 100%; flex-wrap: nowrap; justify-content: flex-start; }
+  .search { flex: 1 1 auto; max-width: none; min-width: 0; }
+  .sql-toggle { padding: 0 10px; }
+  .sql-toggle span, .theme span { display: none; }
+  .theme button { padding: 0 11px; }
+  .hero { padding: 24px 0 24px; }
+  .total { font-size: clamp(42px, 13vw, 64px); }
+  .lead { font-size: 17px; }
+  .kpis { gap: 14px; margin-top: 22px; }
+  .kpi b { font-size: 19px; }
+  h2 { font-size: 23px; }
+  section { padding: 24px 0; }
+  .years-arrow { display: none; }
+  .filters { flex-direction: column; align-items: stretch; }
+  .filters label { flex-direction: column; align-items: stretch; gap: 4px; font-size: 14px; }
+  .filters select { width: 100%; min-width: 0; }
+  .presets { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+  .presets button { flex: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   body { transition: none; }

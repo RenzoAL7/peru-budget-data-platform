@@ -1,4 +1,4 @@
-import { entitySql, initConsole, showPreset, showSql, yearChanged } from "./console.js";
+import { entitySql, initConsole, query, showPreset, showSql, yearChanged } from "./console.js";
 
 const main = document.getElementById("contenido");
 const cache = new Map();
@@ -49,6 +49,9 @@ function paint(root = main) {
 const sqlButton = (preset) => `<button type="button" class="sql-btn" data-sql="${preset}">Ver SQL</button>`;
 const sectionHead = (heading, preset, id) => `<div class="sec-head"><h2${id ? ` id="${id}"` : ""}>${heading}</h2>${preset ? sqlButton(preset) : ""}</div>`;
 
+const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto",
+  "septiembre", "octubre", "noviembre", "diciembre"];
+
 function closedYears(meta) {
   return meta.cobertura.filter((c) => c.estado === "completo" && c.ultimo_mes === 12)
     .map((c) => c.ano).sort((a, b) => b - a);
@@ -71,15 +74,25 @@ async function home() {
   const [meta, nacional, regiones, obras] = await Promise.all([
     load("meta.json"), load("nacional.json"), load("regiones.json"), load("obras.json"),
   ]);
-  const years = closedYears(meta).filter((y) => nacional[y]).slice(0, 5);
-  if (!years.includes(selectedYear)) selectedYear = meta.ano_cerrado;
+  // Todos los años, del mas reciente al mas antiguo. Los incompletos se muestran desactivados.
+  const coverage = [...meta.cobertura].sort((a, b) => b.ano - a.ano);
+  const usable = (c) => Boolean(nacional[c.ano]);
+  const running = (c) => c.ultimo_mes < 12;
+  if (!coverage.some((c) => c.ano === selectedYear && usable(c))) selectedYear = meta.ano_cerrado;
+  const chip = (c) => usable(c)
+    ? `<button type="button" class="chip" data-ano="${c.ano}" aria-pressed="false"${running(c) ? ` aria-label="${c.ano}, en curso hasta ${MONTHS[c.ultimo_mes - 1]}"` : ""}>${c.ano}${running(c) ? `<small>hasta ${MONTHS[c.ultimo_mes - 1].slice(0, 3)}.</small>` : ""}</button>`
+    : `<button type="button" class="chip" disabled title="Archivo oficial incompleto: no se suma" aria-label="${c.ano}, archivo oficial incompleto">${c.ano}<small>incompleto</small></button>`;
   const first = meta.cobertura[0]?.ano;
   const last = meta.cobertura.at(-1)?.ano;
   main.innerHTML = `
     <section class="hero" aria-labelledby="total">
       <div class="hero-meta">
         <p>${esc(one.format(meta.filas / 1e6))} M de registros oficiales · ${first}–${last}</p>
-        <div class="years-pick" role="group" aria-label="Elegir año">${years.map((y) => `<button type="button" class="chip" data-ano="${y}" aria-pressed="false">${y}</button>`).join("")}</div>
+      </div>
+      <div class="years">
+        <button type="button" class="years-arrow" data-dir="-1" aria-label="Años más recientes">‹</button>
+        <div class="years-pick" role="group" aria-label="Elegir año" tabindex="-1">${coverage.map(chip).join("")}</div>
+        <button type="button" class="years-arrow" data-dir="1" aria-label="Años anteriores">›</button>
       </div>
       <h1 class="total" id="total"></h1>
       <p class="lead" id="total-frase"></p>
@@ -103,17 +116,22 @@ async function home() {
 
   const draw = () => {
     const year = selectedYear;
+    const info = meta.cobertura.find((c) => c.ano === year);
+    const partial = info && info.ultimo_mes < 12;
     main.querySelectorAll("[data-ano]").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.ano === year)));
+    main.querySelector(`[data-ano="${year}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
     const rows = nacional[year] ?? [];
     const spent = rows.reduce((s, r) => s + r.dev, 0);
     const budget = rows.reduce((s, r) => s + r.pim, 0);
     const [, number, unit] = soles(spent).match(/^(S\/ [\d.,]+)\s*(.*)$/) ?? [, soles(spent), ""];
     document.getElementById("total").innerHTML = `${esc(number)} <small>${esc(unit)}</small>`;
-    document.getElementById("total-frase").textContent = `gastó el Estado peruano en ${year}: el ${pctText(ratio(spent, budget))} de su presupuesto.`;
+    document.getElementById("total-frase").textContent = partial
+      ? `gastó el Estado peruano en ${year} hasta ${MONTHS[info.ultimo_mes - 1]}: el ${pctText(ratio(spent, budget))} de su presupuesto del año, que aún está en curso.`
+      : `gastó el Estado peruano en ${year}: el ${pctText(ratio(spent, budget))} de su presupuesto.`;
     document.getElementById("kpis").innerHTML = `
-      <div class="kpi"><span>Presupuesto final</span><b>${esc(soles(budget))}</b></div>
-      <div class="kpi k-bar"><span>Gastado</span><b>${esc(soles(spent))}</b></div>
-      <div class="kpi k-accent"><span>Quedó sin gastar</span><b>${esc(soles(budget - spent))}</b></div>`;
+      <div class="kpi"><span>${partial ? "Presupuesto del año" : "Presupuesto final"}</span><b>${esc(soles(budget))}</b></div>
+      <div class="kpi k-bar"><span>${partial ? `Gastado hasta ${MONTHS[info.ultimo_mes - 1]}` : "Gastado"}</span><b>${esc(soles(spent))}</b></div>
+      <div class="kpi k-accent"><span>${partial ? "Falta gastar" : "Quedó sin gastar"}</span><b>${esc(soles(budget - spent))}</b></div>`;
 
     const top = rows.slice(0, 8);
     document.getElementById("fn-list").innerHTML = top.map((r) => `<li class="fn">
@@ -131,7 +149,18 @@ async function home() {
       <div class="dot-line"><span class="dot" data-x="${Math.max(0, Math.min(100, ((r.a * 100 - axisMin) / (100 - axisMin)) * 100))}"></span></div></li>`).join("");
     paint();
   };
-  main.querySelector(".years-pick").addEventListener("click", (ev) => {
+  const strip = main.querySelector(".years-pick");
+  const arrows = main.querySelectorAll(".years-arrow");
+  const syncArrows = () => {
+    arrows[0].disabled = strip.scrollLeft <= 1;
+    arrows[1].disabled = strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 1;
+  };
+  arrows.forEach((a) => a.addEventListener("click", () => {
+    strip.scrollBy({ left: +a.dataset.dir * strip.clientWidth * 0.8, behavior: "smooth" });
+  }));
+  strip.addEventListener("scroll", syncArrows, { passive: true });
+  addEventListener("resize", syncArrows);
+  strip.addEventListener("click", (ev) => {
     const button = ev.target.closest("[data-ano]");
     if (!button) return;
     selectedYear = +button.dataset.ano;
@@ -139,6 +168,7 @@ async function home() {
     yearChanged();
   });
   draw();
+  syncArrows();
 }
 
 /* ---------- Entidad ---------- */
@@ -190,29 +220,116 @@ async function entity(id) {
 }
 
 /* ---------- Obras ---------- */
+const sqlText = (v) => `'${String(v).replace(/'/g, "''")}'`;
+const placeName = (e) => title(e.n.replace(/^MUNICIPALIDAD (DISTRITAL|PROVINCIAL) DE /, ""))
+  + (e.n.startsWith("MUNICIPALIDAD PROVINCIAL") ? " (provincial)" : "");
+
+/** Consulta de obras para el filtro elegido, ordenada de mas a menos dinero sin gastar. */
+function obrasSql(year, { dep, prov, dist }) {
+  const where = [`p.ano = ${year}`];
+  let scope = "todo el Perú";
+  if (dist) {
+    where.push(`p.entidad_id = ${sqlText(dist.id)}`);
+    scope = `la ${title(dist.n)}`;
+  } else if (prov) {
+    // Las obras no traen provincia: se usan las municipalidades de esa provincia.
+    where.push(`e.nivel = 'M'`, `e.departamento = ${sqlText(dep)}`, `e.provincia = ${sqlText(prov)}`);
+    scope = `las municipalidades de la provincia de ${title(prov)}`;
+  } else if (dep) {
+    where.push(`p.departamento = ${sqlText(dep)}`);
+    scope = `${title(dep)}, sumando gobierno nacional, regional y municipal`;
+  }
+  return `-- Obras de ${scope}, de más a menos dinero sin gastar.
+SELECT p.codigo, p.nombre, p.departamento AS dep,
+       p.pim, p.devengado AS dev, p.avance,
+       e.entidad_id AS id, e.nombre AS entidad
+FROM mart_proyecto p
+JOIN mart_entidad e USING (entidad_id)
+WHERE ${where.join("\n  AND ")}
+ORDER BY p.sin_ejecutar DESC
+LIMIT 50;`;
+}
+
 async function obras() {
-  const [list, meta] = await Promise.all([load("obras.json"), load("meta.json")]);
-  const deps = [...new Set(list.map((o) => o.dep).filter(Boolean))].sort();
+  const [list, meta, index] = await Promise.all([load("obras.json"), load("meta.json"), load("buscador.json")]);
+  const year = meta.ano_cerrado;
+  const munis = index.filter((e) => e.v === "M" && e.d && e.p);
+  const deps = [...new Set([...munis.map((e) => e.d), ...list.map((o) => o.dep).filter(Boolean)])].sort();
+  const options = (items, label, all) => `<option value="">${all}</option>` +
+    items.map(([value, text]) => `<option value="${esc(value)}">${esc(text)}</option>`).join("");
   main.innerHTML = `<h1>Obras que se quedaron con la plata sin gastar</h1>
-    <p class="lead">Proyectos con más dinero sin ejecutar en ${meta.ano_cerrado}.</p>
+    <p class="lead">Proyectos con más dinero sin ejecutar en ${year}, de más a menos.</p>
     <p class="note">Gastar poco no prueba corrupción. Una obra puede estar empezando, tener problemas técnicos o haber recibido fondos a fin de año. Es una señal para hacer preguntas.</p>
     <form id="buscar-obra" class="obra-search" role="search" hidden>
       <label class="sr" for="obra-q">Buscar obras</label>
       <input id="obra-q" type="search" maxlength="120" placeholder="Busca como hablas: posta médica, cancha de fútbol, pistas…">
     </form>
     <div class="filters">
-      <label>Departamento <select id="dep"><option value="">Todo el Perú</option>${deps.map((d) => `<option value="${esc(d)}">${esc(title(d))}</option>`).join("")}</select></label>
-      ${sqlButton("obras")}
+      <label>Departamento <select id="dep">${options(deps.map((d) => [d, title(d)]), "dep", "Todo el Perú")}</select></label>
+      <label>Provincia <select id="prov" disabled><option value="">Todas</option></select></label>
+      <label>Distrito <select id="dist" disabled><option value="">Todos</option></select></label>
+      <button type="button" class="sql-btn" id="obras-sql">Ver SQL</button>
     </div>
     <p class="sub" id="obra-estado" role="status"></p>
     <div id="lista"></div>`;
-  const draw = () => {
-    const d = document.getElementById("dep").value;
-    const box = document.getElementById("lista");
-    box.innerHTML = list.filter((o) => !d || o.dep === d).slice(0, 40).map((o) => obraCard(o, true)).join("");
-    paint(box);
+
+  const dep = document.getElementById("dep");
+  const prov = document.getElementById("prov");
+  const dist = document.getElementById("dist");
+  const status = document.getElementById("obra-estado");
+  const box = document.getElementById("lista");
+  const filter = () => ({
+    dep: dep.value,
+    prov: prov.value,
+    dist: munis.find((e) => e.id === dist.value) ?? null,
+  });
+  let ticket = 0;
+
+  const draw = async () => {
+    const f = filter();
+    const mine = ++ticket;
+    if (!f.dep) {
+      // Sin filtro: la lista nacional ya publicada, sin descargar el motor SQL.
+      box.innerHTML = list.slice(0, 40).map((o) => obraCard(o, true)).join("");
+      status.textContent = "";
+      paint(box);
+      return;
+    }
+    status.textContent = "Consultando las obras…";
+    box.setAttribute("aria-busy", "true");
+    try {
+      const rows = await query(obrasSql(year, f));
+      if (mine !== ticket) return;
+      box.innerHTML = rows.length
+        ? rows.map((o) => obraCard(o, true)).join("")
+        : `<p class="sub">No hay obras registradas en ${year} para este filtro.</p>`;
+      status.textContent = rows.length ? `${rows.length === 50 ? "Las 50" : rows.length} obras con más dinero sin gastar.` : "";
+      paint(box);
+    } catch (error) {
+      console.error(error);
+      if (mine === ticket) status.textContent = "No se pudo consultar las obras. Prueba de nuevo.";
+    } finally {
+      if (mine === ticket) box.removeAttribute("aria-busy");
+    }
   };
-  document.getElementById("dep").addEventListener("change", draw);
+
+  dep.addEventListener("change", () => {
+    const provs = [...new Set(munis.filter((e) => e.d === dep.value).map((e) => e.p))].sort();
+    prov.innerHTML = options(provs.map((p) => [p, title(p)]), "prov", "Todas");
+    prov.disabled = !dep.value;
+    dist.innerHTML = `<option value="">Todos</option>`;
+    dist.disabled = true;
+    draw();
+  });
+  prov.addEventListener("change", () => {
+    const dists = munis.filter((e) => e.d === dep.value && e.p === prov.value)
+      .sort((a, b) => placeName(a).localeCompare(placeName(b), "es"));
+    dist.innerHTML = options(dists.map((e) => [e.id, placeName(e)]), "dist", "Todos");
+    dist.disabled = !prov.value;
+    draw();
+  });
+  dist.addEventListener("change", draw);
+  document.getElementById("obras-sql").addEventListener("click", () => showSql(obrasSql(year, filter()), "mart_proyecto"));
   draw();
   wireObraSearch();
 }

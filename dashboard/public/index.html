@@ -6,6 +6,9 @@
   <title>Peru Spend Tracker</title>
   <meta name="description" content="Cuánto dinero público tuvo y gastó el Estado peruano, por función, región, entidad y obra. Con una consola SQL que consulta los datos en tu navegador.">
   <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <script src="theme.js"></script>
   <link rel="preload" href="vendor/fonts/archivo-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="styles.css">
@@ -29,14 +32,18 @@
               aria-controls="resultados" aria-expanded="false">
             <ul id="resultados" class="hits" hidden></ul>
           </div>
+          <button type="button" class="sql-toggle" id="abrir-consola" aria-controls="consola" aria-expanded="false" aria-label="Consola SQL">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg>
+            <span>Consola SQL</span>
+          </button>
           <div class="theme" role="group" aria-label="Tema de la página">
-            <button type="button" data-tema="claro" aria-pressed="false">
+            <button type="button" data-tema="claro" aria-pressed="false" aria-label="Tema claro">
               <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-              Claro
+              <span>Claro</span>
             </button>
-            <button type="button" data-tema="oscuro" aria-pressed="false">
+            <button type="button" data-tema="oscuro" aria-pressed="false" aria-label="Tema oscuro">
               <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
-              Oscuro
+              <span>Oscuro</span>
             </button>
           </div>
         </div>
@@ -48,13 +55,18 @@
       </footer>
     </div>
 
-    <aside class="console" aria-labelledby="consola-titulo">
+    <aside class="console" id="consola" aria-labelledby="consola-titulo" hidden>
       <div class="console-inner">
         <div class="console-head">
           <h2 id="consola-titulo">Consola SQL</h2>
-          <a href="https://github.com/RenzoAL7/peru-spend-tracker/tree/main/dbt/models" rel="noopener">Modelos dbt</a>
+          <span class="console-links">
+            <a href="https://github.com/RenzoAL7/peru-spend-tracker/tree/main/dbt/models" rel="noopener">Modelos dbt</a>
+            <button type="button" class="close" id="cerrar-consola" aria-label="Cerrar consola SQL">
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
+          </span>
         </div>
-        <p class="console-sub">Consulta los marts que alimentan esta página. <span id="motor" role="status">El motor se carga al ejecutar la primera consulta.</span></p>
+        <p class="console-sub">Consulta los marts que alimentan esta página. <span id="motor" role="status">El motor se descarga al ejecutar la primera consulta.</span></p>
 
         <div class="presets" role="group" aria-label="Consultas de ejemplo" id="presets"></div>
 
