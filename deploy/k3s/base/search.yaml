@@ -13,7 +13,11 @@ metadata:
   name: gasto-search
 spec:
   replicas: 1
-  strategy: {type: Recreate}
+  # El pod nuevo arranca antes de retirar el viejo: la busqueda no se corta al desplegar.
+  # Ambos leen el volumen en modo lectura en el mismo nodo; la cuota deja margen para los dos.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxSurge: 1, maxUnavailable: 0}
   selector:
     matchLabels: {app: gasto-search}
   template:
@@ -49,9 +53,15 @@ spec:
               valueFrom:
                 secretKeyRef: {name: gasto-secrets, key: SEARCH_TOKEN, optional: true}
           securityContext: *sc
+          # /readyz carga el modelo y el indice en la primera llamada. La sonda de arranque
+          # revisa cada 2 s (hasta 2 min) y marca el pod listo en cuanto termina de cargar.
+          startupProbe:
+            httpGet: {path: /readyz, port: 8080}
+            periodSeconds: 2
+            timeoutSeconds: 30
+            failureThreshold: 60
           readinessProbe:
             httpGet: {path: /readyz, port: 8080}
-            initialDelaySeconds: 20
             periodSeconds: 20
             timeoutSeconds: 30
           livenessProbe:
