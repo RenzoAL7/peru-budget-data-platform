@@ -113,7 +113,7 @@ jobs:
           retention-days: 30
 
   promote:
-    name: Proponer la promocion en K3s-Cortex
+    name: Promover en K3s-Cortex
     needs: publish
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -148,25 +148,26 @@ jobs:
         run: |
           kubectl kustomize cortex/apps/peru-budget-data-platform/overlays/2ocpu > /dev/null
           kubectl kustomize cortex/apps/peru-budget-data-platform/overlays/4ocpu > /dev/null
-      - name: Abrir o actualizar la PR de promocion, sin fusion automatica
-        uses: peter-evans/create-pull-request@v7
-        with:
-          token: ${{ secrets.CORTEX_REPO_TOKEN }}
-          path: cortex
-          add-paths: apps/peru-budget-data-platform/**
-          branch: automation/peru-spend-tracker-prod
-          delete-branch: true
-          base: main
-          commit-message: "chore(peru-budget): promote ${{ github.sha }}"
-          title: "chore(peru-budget): promote ${{ github.sha }}"
-          body: |
-            Las cuatro imagenes se construyeron y probaron en el workflow de origen.
-
-            - Origen: https://github.com/RenzoAL7/peru-spend-tracker/commit/${{ github.sha }}
-            - Workflow: https://github.com/RenzoAL7/peru-spend-tracker/actions/runs/${{ github.run_id }}
-            ${{ steps.pins.outputs.images }}
-
-            Copia `deploy/k3s` a `apps/peru-budget-data-platform` y fija los digests en ambos perfiles.
-            Revisa los manifiestos y el Ingress antes de fusionar.
-            Argo CD aplica el cambio despues de fusionar; este workflow no comprueba el despliegue.
-            Para revertir, revierte este commit en K3s-Cortex.
+      - name: Publicar en K3s-Cortex
+        # Promocion automatica: el commit va directo a main y Argo CD lo aplica al recibir
+        # el webhook de GitHub. Para revertir, revierte este commit en K3s-Cortex.
+        working-directory: cortex
+        env:
+          IMAGES: ${{ steps.pins.outputs.images }}
+        run: |
+          git add -A apps/peru-budget-data-platform
+          if git diff --cached --quiet; then
+            echo "Los digests ya estaban desplegados."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          printf 'chore(peru-budget): promote %s\n\nOrigen: https://github.com/RenzoAL7/peru-spend-tracker/commit/%s\nWorkflow: https://github.com/RenzoAL7/peru-spend-tracker/actions/runs/%s\n%s\n' \
+            "$GITHUB_SHA" "$GITHUB_SHA" "$GITHUB_RUN_ID" "$IMAGES" > "$RUNNER_TEMP/mensaje.txt"
+          git commit -q -F "$RUNNER_TEMP/mensaje.txt"
+          for attempt in 1 2 3; do
+            git pull -q --rebase origin main && git push -q origin HEAD:main && exit 0
+            sleep 5
+          done
+          echo "::error::No se pudo publicar en K3s-Cortex"
+          exit 1

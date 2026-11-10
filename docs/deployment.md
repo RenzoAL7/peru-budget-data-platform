@@ -4,10 +4,11 @@
 
 1. Un push a `main` ejecuta CI y publica las imágenes `pipeline`, `search`, `airflow` y `site` en GHCR solo para ARM64, la arquitectura de la VM. Se construyen en runners ARM nativos de GitHub, sin emulación, y con caché de capas entre ejecuciones.
 2. El workflow guarda el digest de cada imagen.
-3. El job `promote` ejecuta `scripts/promote.py`, que copia `deploy/k3s` a `apps/peru-budget-data-platform` en `RenzoAL7/K3s-Cortex` y fija los cuatro digests en ambos perfiles. Luego abre o actualiza la PR `automation/peru-spend-tracker-prod`. Nunca la fusiona.
-4. Al fusionar esa PR, Argo CD aplica el cambio. Para revertir, se revierte ese commit en K3s-Cortex.
+3. El job `promote` ejecuta `scripts/promote.py`, que copia `deploy/k3s` a `apps/peru-budget-data-platform` en `RenzoAL7/K3s-Cortex` y fija los cuatro digests en ambos perfiles. Luego hace un commit directo en `main` de K3s-Cortex, sin PR.
+4. Un webhook de GitHub avisa a Argo CD, que sincroniza en segundos. Si el webhook falla, Argo CD revisa el repositorio cada minuto. Para revertir, se revierte ese commit en K3s-Cortex.
+5. Site y search se actualizan con `RollingUpdate`: el pod nuevo arranca antes de retirar el viejo, así que el sitio no se corta.
 
-El job necesita el secreto `CORTEX_REPO_TOKEN` en este repositorio: un token con permiso de escritura de contenido y de Pull Requests sobre `RenzoAL7/K3s-Cortex`. Puede ser el mismo que usa GPath.
+El job necesita el secreto `CORTEX_REPO_TOKEN` en este repositorio: un token con permiso de escritura de contenido sobre `RenzoAL7/K3s-Cortex`. Es el mismo que usa el repositorio portafolio.
 
 Hay dos perfiles: `overlays/2ocpu` para la VM actual y `overlays/4ocpu` para cuando tenga 4 OCPU y 24 GB.
 
