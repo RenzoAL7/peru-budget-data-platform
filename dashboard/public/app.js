@@ -26,7 +26,7 @@ const clampPct = (v) => Math.max(0, Math.min(100, (v ?? 0) * 100));
 const title = (s) => {
   const lower = String(s ?? "").toLowerCase();
   return lower.replace(/(^|[\s(-])([a-záéíóúñ])/g, (_, p, c) => p + c.toUpperCase())
-    .replace(/\b(De|Del|La|Las|Los|Y|En|Para|A|El)\b/g, (m) => m.toLowerCase())
+    .replace(/(?<=\s)(De|Del|La|Las|Los|Y|En|Para|A|El)\b/g, (m) => m.toLowerCase())
     .replace(/([cs])ion\b/g, "$1ión")
     .replace(/\bU\.n\./g, "U.N.")
     .replace(/\bPublic([ao]s?)\b/g, "Públic$1")
