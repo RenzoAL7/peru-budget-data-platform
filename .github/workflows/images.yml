@@ -76,6 +76,8 @@ jobs:
               curl -fsSI -H 'Accept-Encoding: gzip' http://127.0.0.1:8088/vendor/duckdb/duckdb-eh.wasm \
                 | tr -d '\r' | grep -qi '^content-type: application/wasm'
               curl -fsSI http://127.0.0.1:8088/ | grep -qi "wasm-unsafe-eval"
+              # HTML y JS se revalidan siempre, para no mezclar versiones tras un despliegue.
+              curl -fsSI http://127.0.0.1:8088/app.js | tr -d '\r' | grep -qi '^cache-control: no-cache$'
               test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8088/presupuesto)" = 301
               docker rm -f site-check
               ;;
