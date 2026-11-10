@@ -2,7 +2,7 @@
 
 Data platform that turns Peru's official public spending files into a website anyone can use.
 
-Search for a municipality, region, or ministry and see how much money it had, how much it spent, what it spent it on, and which public works were left unfinished.
+Search for a municipality, region, or ministry and see how much money it had, how much it spent, what it spent it on, and which public works were left unfinished. A SQL console next to every chart runs DuckDB in the browser against the same marts, so anyone can check the numbers or ask their own questions.
 
 **Live site:** https://peru-spend-tracker.renzoaguilar.dev
 
@@ -19,6 +19,7 @@ Search for a municipality, region, or ministry and see how much money it had, ho
 
 - Built an end-to-end ELT pipeline in Python and SQL that processes 150.4M official spending records from Peru's Ministry of Economy and Finance (2009–2026), reducing 140+ GB of CSV to 4.4 GB of Parquet and serving 2,154 public entities through a public website.
 - Modeled a medallion warehouse on DuckDB with 10 dbt models and SQL data-quality tests, using OCI Object Storage as the data lake; added schema contracts plus row-count and financial reconciliation, which flagged truncated official files for 2016–2017 and matched enacted budget laws for 2014, 2015, 2024, and 2025.
+- Shipped an in-browser SQL console with DuckDB-WASM that queries the published gold marts as Parquet over HTTP range requests, with every chart linked to the query that produces it and a strict same-origin Content Security Policy.
 - Orchestrated incremental loads with Apache Airflow on K3s, with task dependencies, retries, and stage-level recovery; shipped multi-architecture images through GitHub Actions and Argo CD, and added semantic search across 110,645 public works using a multilingual ONNX model.
 
 ## Architecture
@@ -35,7 +36,8 @@ flowchart LR
     Bronze & Silver & Gold <--> OCI[(OCI Object Storage)]
     OCI -- pretrained model --> Search
     Index --> Search
-    Gold --> Site[Nginx pod]
+    Gold -- JSON + Parquet --> Site[Nginx pod]
+    Site -- Parquet --> Browser[DuckDB-WASM in the browser]
     Site -. proxy .-> Search
     User((Public)) --> Traefik --> Site
     Git[GitHub Actions] --> GHCR[(GHCR)]
@@ -50,6 +52,7 @@ flowchart LR
 | Orchestration | Airflow 3.4, KubernetesPodOperator | Daily runs and a monthly review of the full history |
 | Search | FastAPI, ONNX, multilingual model | Searches 110,645 public works by meaning |
 | Publishing | Nginx, Traefik, Cloudflare | Static website in a cluster pod, served over HTTPS on its own domain |
+| SQL console | DuckDB-WASM, Parquet | Read-only queries over the gold marts, run entirely in the visitor's browser |
 | Deployment | GitHub Actions, GHCR, Argo CD | Multi-architecture images pinned by digest |
 
 ## AI model

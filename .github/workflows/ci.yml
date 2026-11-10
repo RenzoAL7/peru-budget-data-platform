@@ -41,6 +41,8 @@ jobs:
           PATH="$PWD/.venv/bin:$PATH" PYTHONPATH=src python -m gasto_pipeline.cli transform
           PATH="$PWD/.venv/bin:$PATH" PYTHONPATH=src python -m gasto_pipeline.cli publish
           test -s "$DATA_DIR/published/data/meta.json"
+          test -s "$DATA_DIR/published/data/sql/catalogo.json"
+          test -s "$DATA_DIR/published/data/sql/mart_proyecto.parquet"
       - name: Validar DAGs de Airflow
         run: |
           uv venv --python 3.12 .airflow
