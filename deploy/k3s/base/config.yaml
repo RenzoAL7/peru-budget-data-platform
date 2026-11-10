@@ -9,7 +9,6 @@ data:
   DUCKDB_THREADS: "2"
   S3_REGION: us-ashburn-1
   S3_BUCKET: gasto-publico-peru
-  CLOUDFLARE_PAGES_PROJECT: peru-budget-data-platform
   FASTEMBED_CACHE_PATH: /models
   MODEL_OFFLINE: "1"
   MODEL_SHA256: 5a08e50ef4ad9ced29d50e8174d8caf43011cb487f433074ff9d313fd0868f98

@@ -2,7 +2,7 @@
 
 ## Flujo
 
-1. Un push a `main` ejecuta CI y publica las imágenes `pipeline`, `search`, `airflow` y `site` en GHCR para ARM64 y AMD64.
+1. Un push a `main` ejecuta CI y publica las imágenes `pipeline`, `search`, `airflow` y `site` en GHCR solo para ARM64, la arquitectura de la VM. Se construyen en runners ARM nativos de GitHub, sin emulación, y con caché de capas entre ejecuciones.
 2. El workflow guarda el digest de cada imagen.
 3. El job `promote` ejecuta `scripts/promote.py`, que copia `deploy/k3s` a `apps/peru-budget-data-platform` en `RenzoAL7/K3s-Cortex` y fija los cuatro digests en ambos perfiles. Luego abre o actualiza la PR `automation/peru-spend-tracker-prod`. Nunca la fusiona.
 4. Al fusionar esa PR, Argo CD aplica el cambio. Para revertir, se revierte ese commit en K3s-Cortex.
@@ -74,4 +74,4 @@ docker run --rm -p 8088:8080 -v "$DATA_DIR/published:/data/published:ro" site
 
 ## Búsqueda semántica
 
-En el clúster, Nginx reenvía la búsqueda al pod `gasto-search` y una NetworkPolicy impide cualquier otro acceso. Para una futura publicación en Cloudflare Pages, la función `dashboard/functions/api/buscar.js` necesita dos variables: `SEARCH_ORIGIN`, con una dirección HTTPS que llegue al servicio `gasto-search`, y `SEARCH_TOKEN`. Sin buscador disponible, la página funciona y oculta esa casilla.
+En el clúster, Nginx reenvía la búsqueda al pod `gasto-search` y una NetworkPolicy impide cualquier otro acceso. Sin buscador disponible, la página funciona y oculta esa casilla.

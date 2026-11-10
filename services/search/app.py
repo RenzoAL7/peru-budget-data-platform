@@ -23,7 +23,7 @@ app.add_middleware(CORSMiddleware, allow_origins=ORIGINS, allow_methods=["GET"])
 
 
 def require_token(x_search_token: str = Header(default="")) -> None:
-    """Solo la funcion de Cloudflare Pages conoce el token."""
+    """Token opcional para llamadas directas; Nginx en el cluster no lo necesita."""
     if TOKEN and not secrets.compare_digest(x_search_token, TOKEN):
         raise HTTPException(status_code=403, detail="No autorizado")
 
