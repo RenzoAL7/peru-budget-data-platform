@@ -54,18 +54,7 @@ La página se publica en `https://peru-spend-tracker.renzoaguilar.dev`. Cloudfla
 
 El registro DNS es un `A` llamado `peru-spend-tracker` que apunta a la IP del balanceador, con el proxy de Cloudflare activado.
 
-Para cifrar también el tramo entre Cloudflare y la VM:
-
-1. En Cloudflare, ve a **SSL/TLS › Origin Server › Create Certificate** y crea un certificado para `renzoaguilar.dev` y `*.renzoaguilar.dev`. Guarda el certificado como `origen.pem` y la clave como `origen.key`. La clave solo se muestra una vez.
-2. Crea el secreto en el clúster:
-
-   ```bash
-   kubectl -n gasto-publico create secret tls peru-spend-tracker-origen --cert=origen.pem --key=origen.key
-   ```
-
-3. Cuando el sitio responda por HTTPS, cambia en Cloudflare **SSL/TLS › Overview** al modo **Full (strict)**.
-
-Mientras el modo sea **Flexible**, Cloudflare llega a la VM por HTTP y el Ingress `gasto-site-dominio` atiende la petición. Con **Full (strict)** la atiende `gasto-site-dominio-tls`, que usa el certificado de origen.
+El balanceador de OCI solo reenvía el puerto 80 a Traefik. Por eso Cloudflare debe usar el modo SSL **Flexible**: termina HTTPS hacia los visitantes y llega a la VM por HTTP, donde lo atiende el Ingress `gasto-site-dominio`. No cambies a **Full (strict)** mientras el balanceador no tenga un listener en el puerto 443, porque el sitio dejaría de responder.
 
 ## Búsqueda semántica
 
