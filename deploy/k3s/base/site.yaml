@@ -61,3 +61,48 @@ spec:
               service:
                 name: gasto-site
                 port: {name: http}
+---
+# Dominio propio detras de Cloudflare. Por HTTP sirve al modo SSL "Flexible".
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gasto-site-dominio
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web
+    traefik.ingress.kubernetes.io/router.priority: "20"
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: peru-spend-tracker.renzoaguilar.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gasto-site
+                port: {name: http}
+---
+# Por HTTPS con el certificado de origen de Cloudflare, para el modo "Full (strict)".
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gasto-site-dominio-tls
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.priority: "20"
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts: [peru-spend-tracker.renzoaguilar.dev]
+      secretName: peru-spend-tracker-origen
+  rules:
+    - host: peru-spend-tracker.renzoaguilar.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gasto-site
+                port: {name: http}

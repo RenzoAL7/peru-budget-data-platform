@@ -10,7 +10,7 @@ dependencies = ["duckdb>=1.4", "requests>=2.32", "boto3>=1.35"]
 dbt = ["dbt-duckdb>=1.9"]
 ml = ["fastembed>=0.7", "numpy>=2"]
 api = ["fastembed>=0.7", "numpy>=2", "fastapi>=0.115", "uvicorn>=0.32"]
-dev = ["dbt-duckdb>=1.9", "fastembed>=0.7", "numpy>=2", "fastapi>=0.115", "httpx>=0.28", "pytest>=8", "ruff>=0.8"]
+dev = ["dbt-duckdb>=1.9", "fastembed>=0.7", "numpy>=2", "fastapi>=0.115", "httpx>=0.28", "pytest>=8", "pyyaml>=6", "ruff>=0.8"]
 
 [project.scripts]
 gasto = "gasto_pipeline.cli:main"

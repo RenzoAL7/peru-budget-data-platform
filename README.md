@@ -4,7 +4,7 @@ Data platform that turns Peru's official public spending files into a website an
 
 Search for a municipality, region, or ministry and see how much money it had, how much it spent, what it spent it on, and which public works were left unfinished.
 
-**Live site:** http://193.122.221.201/presupuesto/
+**Live site:** https://peru-spend-tracker.renzoaguilar.dev
 
 | Metric | Value |
 |---|---|
@@ -49,7 +49,7 @@ flowchart LR
 | Transformation | dbt, DuckDB | Yearly partitions, marts, and quality tests |
 | Orchestration | Airflow 3.4, KubernetesPodOperator | Daily runs and a monthly review of the full history |
 | Search | FastAPI, ONNX, multilingual model | Searches 110,645 public works by meaning |
-| Publishing | Nginx, Traefik | Static website in a cluster pod |
+| Publishing | Nginx, Traefik, Cloudflare | Static website in a cluster pod, served over HTTPS on its own domain |
 | Deployment | GitHub Actions, GHCR, Argo CD | Multi-architecture images pinned by digest |
 
 ## AI model
@@ -104,7 +104,6 @@ As an external check, the initial budget calculated for 2014 (S/ 118,934 million
 ## Limitations
 
 - The cluster has a single node, so a VM outage takes down the website and search. The lake remains in the bucket.
-- The website is served over HTTP because it does not have its own domain yet.
 - The VM has little free disk space and each yearly CSV takes up to 10 GB. For that reason, the initial load was processed outside the cluster and the Airflow DAGs are paused until storage is expanded.
 - A month counts as having data once the ministry has published it, so the current year is always partial.
 
