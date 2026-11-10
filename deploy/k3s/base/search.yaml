@@ -28,13 +28,13 @@ spec:
           command: [gasto, pull-model]
           envFrom: &env
             - configMapRef: {name: gasto-config}
-            - secretRef: {name: gasto-secrets}
+            - secretRef: {name: gasto-secrets, optional: true}
           securityContext: &sc {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
           resources:
             requests: {cpu: 50m, memory: 128Mi}
             limits: {memory: 512Mi}
           volumeMounts:
-            - {name: models, mountPath: /models}
+            - {name: data, mountPath: /models, subPath: models}
       containers:
         - name: api
           image: ghcr.io/renzoal7/gasto-search:local
@@ -61,13 +61,11 @@ spec:
             requests: {cpu: 100m, memory: 700Mi}
             limits: {memory: 1500Mi}
           volumeMounts:
-            - {name: models, mountPath: /models}
+            - {name: data, mountPath: /models, subPath: models, readOnly: true}
             - {name: data, mountPath: /data, readOnly: true}
             - {name: tmp, mountPath: /tmp}
       volumes:
-        - name: models
-          emptyDir: {sizeLimit: 2Gi}
         - name: tmp
           emptyDir: {sizeLimit: 256Mi}
         - name: data
-          persistentVolumeClaim: {claimName: gasto-data, readOnly: true}
+          persistentVolumeClaim: {claimName: gasto-data}
