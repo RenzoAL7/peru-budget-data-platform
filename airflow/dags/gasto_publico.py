@@ -33,9 +33,16 @@ DEFAULTS = {
     "retry_delay": timedelta(minutes=15),
     "execution_timeout": timedelta(hours=6),
 }
+# El buscador guarda el modelo en el subdirectorio models de este mismo volumen.
+MODEL_CACHE = {"FASTEMBED_CACHE_PATH": "/data/models"}
 
 
-def step(task_id: str, *args: str, command: list[str] | None = None) -> KubernetesPodOperator:
+def step(
+    task_id: str,
+    *args: str,
+    command: list[str] | None = None,
+    env: dict[str, str] | None = None,
+) -> KubernetesPodOperator:
     return KubernetesPodOperator(
         task_id=task_id,
         name=task_id.replace("_", "-"),
@@ -44,6 +51,7 @@ def step(task_id: str, *args: str, command: list[str] | None = None) -> Kubernet
         cmds=command or ["gasto"],
         arguments=list(args),
         env_from=ENV_FROM,
+        env_vars=env,
         volumes=[VOLUME],
         volume_mounts=[MOUNT],
         container_resources=RESOURCES,
@@ -64,15 +72,15 @@ def step(task_id: str, *args: str, command: list[str] | None = None) -> Kubernet
 
 
 def pipeline(ingest_args: list[str]) -> None:
+    restore = step("restore_lake", "pull", "--missing-only")
     ingest = step("ingest_bronze", "ingest", *ingest_args)
     silver = step("transform_silver", "transform", "--changed", "--skip-gold")
-    gold = step("build_gold", "gold")
-    index = step("update_search_index", "index")
-    backup = step("push_to_bucket", "push")
+    gold = step("build_gold", "gold", "--require-history")
     site = step("publish_site", command=["/app/scripts/publish-site.sh"])
-    ingest >> silver >> gold >> [index, site]
-    index >> backup
-    site >> backup
+    index = step("update_search_index", "index", env=MODEL_CACHE)
+    backup = step("push_to_bucket", "push")
+    # En serie: la cuota de memoria solo admite un pod del pipeline a la vez.
+    restore >> ingest >> silver >> gold >> site >> index >> backup
 
 
 with DAG(

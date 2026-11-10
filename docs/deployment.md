@@ -32,7 +32,13 @@ kubectl -n gasto-publico create secret generic airflow-env \
 
 El histórico se procesa fuera del clúster y se sube al bucket. Los JSON, el índice y el modelo se copian al volumen `gasto-data`.
 
-No actives los DAGs mientras la VM tenga menos de 15 GB libres: cada CSV anual ocupa hasta 10 GB y llenar el disco afectaría a todo el clúster. Para que el DAG respalde en el bucket, agrega las claves S3 a `gasto-secrets`.
+Antes de activar los DAGs:
+
+1. Agrega las claves S3 a `gasto-secrets`. Sin ellas, los DAGs fallan en su primer paso.
+2. Desde la máquina que hizo la carga, sube los manifiestos con `gasto push --layers manifests`. Sin ellos, los DAGs vuelven a descargar los CSV del MEF.
+3. Deja al menos 15 GB libres en la VM, además del espacio para bronze (4.4 GB) y silver. Cada CSV anual ocupa hasta 10 GB y llenar el disco afectaría a todo el clúster.
+
+Cada corrida empieza con `gasto pull --missing-only`, que restaura lo que falte en el volumen sin reemplazar archivos locales. `gasto gold --require-history` falla si falta algún año cerrado en silver, para no publicar un histórico recortado. La ingesta se detiene si una descarga dejaría menos de 5 GB libres.
 
 La interfaz de Airflow no se expone a internet:
 
