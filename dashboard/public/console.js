@@ -100,6 +100,7 @@ const ui = {};
 let state = { preset: "", table: "", running: false };
 let engine = null;
 let catalog = [];
+let catalogReady = null;
 let yearOf = () => new Date().getFullYear() - 1;
 
 function lineage(table) {
@@ -114,11 +115,22 @@ function markPreset() {
   });
 }
 
-function setStatus(text) { ui.status.textContent = text; }
+function setStatus(text) { if (ui.status) ui.status.textContent = text; }
+
+/** Catalogo de tablas publicado por el pipeline; se descarga una sola vez. */
+function loadCatalog() {
+  catalogReady ??= fetch("data/sql/catalogo.json").then((response) => {
+    if (!response.ok) throw new Error(String(response.status));
+    return response.json();
+  }).then((tables) => { catalog = tables; return tables; })
+    .catch((error) => { catalogReady = null; throw error; });
+  return catalogReady;
+}
 
 async function startEngine() {
   if (engine) return engine;
   engine = (async () => {
+    await loadCatalog();
     const base = new URL("vendor/duckdb/", document.baseURI);
     setStatus("Descargando DuckDB-WASM (~8 MB, una sola vez)…");
     const duckdb = await import(new URL("duckdb.js", base).href);
@@ -138,7 +150,9 @@ async function startEngine() {
     }
     const version = await db.getVersion();
     setStatus(`DuckDB ${version} en tu navegador · ${catalog.length} tablas.`);
-    return { db, conn, worker };
+    // Conexion aparte para las consultas de la pagina, para no mezclarlas con las de la consola.
+    const pageConn = await db.connect();
+    return { db, conn, pageConn, worker };
   })();
   try {
     return await engine;
@@ -159,6 +173,13 @@ async function stopEngine() {
   } catch {
     // El motor no llego a iniciar.
   }
+}
+
+/** Ejecuta una consulta para la pagina (no para la consola) y devuelve filas como objetos. */
+export async function query(sql) {
+  const { pageConn } = await startEngine();
+  const table = await pageConn.query(sql);
+  return table.toArray().map((row) => row.toJSON());
 }
 
 function cellHtml(value, column, numeric) {
@@ -302,9 +323,7 @@ export async function initConsole({ currentYear }) {
   load(first.sql(yearOf()), first.table, first.id);
 
   try {
-    const response = await fetch("data/sql/catalogo.json");
-    if (!response.ok) throw new Error(String(response.status));
-    catalog = await response.json();
+    await loadCatalog();
   } catch {
     setStatus("Las tablas aún no están publicadas.");
     ui.run.disabled = true;
