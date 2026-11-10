@@ -55,6 +55,16 @@ jobs:
               curl -fsS http://127.0.0.1:8088/presupuesto/ | grep -q "Peru Spend Tracker"
               curl -fsS http://127.0.0.1:8088/ | grep -q "Peru Spend Tracker"
               curl -fsS http://127.0.0.1:8088/app.js > /dev/null
+              curl -fsS http://127.0.0.1:8088/console.js > /dev/null
+              # Consola SQL: motor, extension Parquet y fuentes servidos desde el propio sitio.
+              for path in duckdb/duckdb.js duckdb/duckdb-browser-eh.worker.js \
+                duckdb/extensions/v1.4.3/wasm_eh/parquet.duckdb_extension.wasm \
+                fonts/archivo-latin-800-normal.woff2; do
+                curl -fsS -o /dev/null "http://127.0.0.1:8088/vendor/$path"
+              done
+              curl -fsSI -H 'Accept-Encoding: gzip' http://127.0.0.1:8088/vendor/duckdb/duckdb-eh.wasm \
+                | tr -d '\r' | grep -qi '^content-type: application/wasm'
+              curl -fsSI http://127.0.0.1:8088/ | grep -qi "wasm-unsafe-eval"
               test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8088/presupuesto)" = 301
               docker rm -f site-check
               ;;

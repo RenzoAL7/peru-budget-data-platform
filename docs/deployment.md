@@ -56,6 +56,22 @@ El registro DNS es un `A` llamado `peru-spend-tracker` que apunta a la IP del ba
 
 El balanceador de OCI solo reenvía el puerto 80 a Traefik. Por eso Cloudflare debe usar el modo SSL **Flexible**: termina HTTPS hacia los visitantes y llega a la VM por HTTP, donde lo atiende el Ingress `gasto-site-dominio`. No cambies a **Full (strict)** mientras el balanceador no tenga un listener en el puerto 443, porque el sitio dejaría de responder.
 
+## Consola SQL
+
+La columna derecha del sitio ejecuta DuckDB-WASM en el navegador de cada visitante. `gasto publish` deja los marts en `data/sql/*.parquet` junto con `catalogo.json`, y el navegador los lee por rangos HTTP: una consulta solo descarga las columnas y grupos de filas que usa. Nada se ejecuta en el servidor.
+
+- **Dependencias:** `dashboard/package.json` fija DuckDB-WASM, esbuild y las fuentes. La imagen del sitio corre `node vendor.mjs` en una etapa de Node y copia el resultado a `vendor/`. Esa carpeta no se versiona.
+- **Extensión Parquet:** DuckDB-WASM la descarga de `extensions.duckdb.org`, pero la CSP solo permite el mismo origen. Por eso `vendor.mjs` la descarga al construir la imagen, verifica su SHA-256 y la sirve desde el sitio. Al subir la versión de `@duckdb/duckdb-wasm`, actualiza `DUCKDB_CORE` y el hash en `vendor.mjs`, y la ruta que revisa `images.yml`.
+- **Peso:** el motor pesa unos 8 MB comprimido y el navegador lo guarda en caché. En pantallas anchas se descarga al abrir la página; en celulares, al ejecutar la primera consulta.
+- **Seguridad:** la CSP agrega `'wasm-unsafe-eval'`, que permite compilar WebAssembly pero no habilita `eval()`. `connect-src 'self'` impide que una consulta lea URLs de otros sitios.
+
+Para probar el sitio en local, la imagen arma `vendor/` sola. Para servir `dashboard/public` sin Docker, antes corre `cd dashboard && npm ci && npm run vendor`.
+
+```sh
+docker build -f docker/site.Dockerfile -t site .
+docker run --rm -p 8088:8080 -v "$DATA_DIR/published:/data/published:ro" site
+```
+
 ## Búsqueda semántica
 
 En el clúster, Nginx reenvía la búsqueda al pod `gasto-search` y una NetworkPolicy impide cualquier otro acceso. Para una futura publicación en Cloudflare Pages, la función `dashboard/functions/api/buscar.js` necesita dos variables: `SEARCH_ORIGIN`, con una dirección HTTPS que llegue al servicio `gasto-search`, y `SEARCH_TOKEN`. Sin buscador disponible, la página funciona y oculta esa casilla.

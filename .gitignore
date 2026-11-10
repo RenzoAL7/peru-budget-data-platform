@@ -12,6 +12,7 @@ dbt/logs/
 dbt/dbt_packages/
 dbt/.user.yml
 node_modules/
+dashboard/public/vendor/
 .wrangler/
 .DS_Store
 .claude/

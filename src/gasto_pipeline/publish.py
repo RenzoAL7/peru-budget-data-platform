@@ -19,6 +19,16 @@ MIN_PIM_RANKING = 1_000_000
 RANKING_SIZE = 20
 TOP_PROYECTOS = 400
 PROYECTOS_POR_ENTIDAD = 30
+# Marts que la consola SQL de la pagina puede consultar, en el orden del selector.
+SQL_TABLES = (
+    "mart_nacional_funcion",
+    "mart_region_anual",
+    "mart_entidad",
+    "mart_entidad_anual",
+    "mart_entidad_funcion",
+    "mart_proyecto",
+    "mart_cobertura",
+)
 
 
 def _number(value):
@@ -49,6 +59,34 @@ def choose_years(coverage: list[dict]) -> tuple[int, int | None]:
     latest = max(closed)
     running = [c["ano"] for c in complete if c["ano"] > latest]
     return latest, (max(running) if running else None)
+
+
+def export_sql_tables(con, target: Path) -> list[dict]:
+    """Copia los marts a Parquet para la consola SQL del navegador (DuckDB-WASM).
+
+    El navegador lee estos archivos por rangos HTTP, asi que una consulta solo descarga
+    las columnas y grupos de filas que necesita.
+    """
+    target.mkdir(parents=True, exist_ok=True)
+    catalog = []
+    for table in SQL_TABLES:
+        path = target / f"{table}.parquet"
+        con.execute(
+            f"COPY (SELECT * FROM {table}) TO '{path}' "
+            "(FORMAT parquet, COMPRESSION zstd, ROW_GROUP_SIZE 50000)"
+        )
+        columns = con.execute(
+            "SELECT column_name, data_type FROM information_schema.columns "
+            "WHERE table_name = ? ORDER BY ordinal_position", [table]
+        ).fetchall()
+        catalog.append({
+            "tabla": table,
+            "filas": con.execute(f"SELECT count(*) FROM {table}").fetchone()[0],
+            "bytes": path.stat().st_size,
+            "columnas": [{"nombre": n, "tipo": t} for n, t in columns],
+        })
+    _write(target / "catalogo.json", catalog)
+    return catalog
 
 
 def publish(settings: Settings) -> Path:
@@ -146,6 +184,7 @@ def publish(settings: Settings) -> Path:
         WHERE p.ano = {closed_year}
         ORDER BY p.sin_ejecutar DESC LIMIT {TOP_PROYECTOS}"""))
 
+    export_sql_tables(con, staging / "sql")
     con.close()
     shutil.rmtree(target, ignore_errors=True)
     staging.replace(target)
