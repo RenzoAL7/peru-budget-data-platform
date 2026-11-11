@@ -487,7 +487,7 @@ function setStatus(text) { if (ui.status) ui.status.textContent = text; }
 
 async function startEngine() {
   if (engine) return engine;
-  engine = (async () => {
+  const attempt = (async () => {
     await loadCatalog();
     const base = new URL("vendor/duckdb/", document.baseURI);
     setStatus(t("motor.descarga"));
@@ -506,11 +506,12 @@ async function startEngine() {
       await conn.query(`CREATE VIEW ${tabla} AS SELECT * FROM read_parquet('${tabla}.parquet')`);
     }
     const version = await db.getVersion();
-    setStatus(t("motor.listo", { version, n: catalog.length }));
+    if (engine === attempt) setStatus(t("motor.listo", { version, n: catalog.length }));
     // Conexion aparte para las consultas de la pagina, para no mezclarlas con las de la consola.
     const pageConn = await db.connect();
     return { db, conn, pageConn, worker, version };
   })();
+  engine = attempt;
   try {
     const ready = await engine;
     engineVersion = ready.version;
@@ -762,14 +763,20 @@ async function execute(sql, { plan = false } = {}) {
   if (state.running || !sql.trim()) return;
   hasRun = true;
   setRunning(true);
-  const stopped = new Promise((_, reject) => {
-    const timer = setTimeout(() => reject(new Error(t("error.tiempo"))), TIMEOUT_MS);
-    cancelRun = (reason) => { clearTimeout(timer); reject(new Error(reason)); };
+  const cancelled = new Promise((_, reject) => {
+    cancelRun = (reason) => reject(new Error(reason));
   });
+  cancelled.catch(() => {});
+  let timer = null;
+  let querying = false;
   try {
-    const { conn } = await Promise.race([startEngine(), stopped]);
+    // La descarga del motor (~8 MB) no cuenta para el limite: en una conexion lenta puede
+    // tardar mas de un minuto. Cancelar durante la descarga no la interrumpe.
+    const { conn } = await Promise.race([startEngine(), cancelled]);
+    querying = true;
+    timer = setTimeout(() => cancelRun?.(t("error.tiempo")), TIMEOUT_MS);
     const started = performance.now();
-    const table = await Promise.race([conn.query(sql), stopped]);
+    const table = await Promise.race([conn.query(sql), cancelled]);
     const ms = performance.now() - started;
     if (plan) {
       const rows = table.toArray().map((r) => r.toJSON());
@@ -784,7 +791,9 @@ async function execute(sql, { plan = false } = {}) {
     }
   } catch (error) {
     const message = String(error?.message ?? error);
-    if (message === t("error.tiempo") || message === t("error.cancelada")) await stopEngine();
+    const stopped = message === t("error.tiempo") || message === t("error.cancelada");
+    // Solo se reinicia el motor si se corto una consulta en curso; una descarga sigue sola.
+    if (stopped && querying) await stopEngine();
     if (/dynamically imported module|Importing a module script failed/i.test(message)) {
       showError(t("error.descarga"));
       setStatus(t("motor.error"));
@@ -792,6 +801,7 @@ async function execute(sql, { plan = false } = {}) {
       showError(message.replace(/^Error:\s*/, ""));
     }
   } finally {
+    clearTimeout(timer);
     cancelRun?.("listo");
     cancelRun = null;
     setRunning(false);
