@@ -84,6 +84,9 @@ nav a[aria-current] { color: var(--ink); text-decoration: underline; text-decora
 .theme-toggle { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border: 1px solid var(--field-line); border-radius: 2px; background: var(--field); color: var(--ink); }
 .theme-toggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .theme-toggle .icon-claro { display: none; }
+.gh-link { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 1px solid var(--field-line); border-radius: 2px; background: var(--field); color: var(--ink); }
+.gh-link:hover { color: var(--link); }
+.gh-link svg { width: 20px; height: 20px; fill: currentColor; }
 :root[data-theme="oscuro"] .theme-toggle .icon-claro { display: block; }
 :root[data-theme="oscuro"] .theme-toggle .icon-oscuro { display: none; }
 
