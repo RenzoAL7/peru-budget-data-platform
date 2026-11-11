@@ -2,7 +2,7 @@
 -- La poblacion del INEI existe desde 2018; antes queda vacia.
 with region as (
     select
-        ano,
+        year,
         departamento_meta as ubigeo,
         any_value(departamento_meta_nombre) as departamento,
         sum(pim) as pim,
@@ -10,7 +10,7 @@ with region as (
         case when sum(pim) > 0 then sum(devengado) / sum(pim) end as avance
     from {{ silver('fct_gasto') }}
     where departamento_meta_nombre is not null
-    group by ano, departamento_meta
+    group by year, departamento_meta
 )
 
 select
@@ -20,4 +20,4 @@ select
         as devengado_por_habitante
 from region
 left join {{ ref('poblacion_inei') }} as poblacion
-    on poblacion.ubigeo = region.ubigeo || '0000' and poblacion.ano = region.ano
+    on poblacion.ubigeo = region.ubigeo || '0000' and poblacion.year = region.year

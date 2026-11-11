@@ -1,4 +1,4 @@
-import { entitySql, initConsole, query, showPreset, showSql, toast, yearChanged } from "./console.js?v=dev";
+import { entitySql, initConsole, query, setDataVersion, showPreset, showSql, toast, yearChanged } from "./console.js?v=dev";
 import { applyDom, fmt, funcion, lang, months, pctText, setLang, soles, t } from "./i18n.js?v=dev";
 
 const main = document.getElementById("contenido");
@@ -10,9 +10,12 @@ let selectedYear = null;
 let meta = null;
 
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+// Los datos se piden con la fecha de publicacion (?v=), asi el navegador no reutiliza una copia
+// guardada de antes de una actualizacion. meta.json siempre se revalida (ver nginx).
+const dataUrl = (path) => (path === "meta.json" || !meta ? `data/${path}` : `data/${path}?v=${encodeURIComponent(meta.actualizado)}`);
 const load = (path) => {
   if (!cache.has(path)) {
-    cache.set(path, fetch(`data/${path}`).then((r) => {
+    cache.set(path, fetch(dataUrl(path)).then((r) => {
       if (!r.ok) throw new Error(`${r.status} ${path}`);
       return r.json();
     }));
@@ -447,7 +450,7 @@ const placeName = (e) => title(e.n.replace(/^MUNICIPALIDAD (DISTRITAL|PROVINCIAL
 
 /** Consulta de obras para el filtro elegido, ordenada de mas a menos dinero sin gastar. */
 function obrasSql(year, { dep, prov, dist }) {
-  const where = [`p.ano = ${year}`];
+  const where = [`p.year = ${year}`];
   let scope = "todo el Perú";
   if (dist) {
     where.push(`p.entidad_id = ${sqlText(dist.id)}`);
@@ -608,7 +611,7 @@ SELECT e.nivel_nombre, e.nombre, e.departamento,
        ROUND(100 * a.avance, 1) AS avance_pct
 FROM mart_entidad_anual a
 JOIN mart_entidad e USING (entidad_id)
-WHERE a.ano = ${year} AND a.pim >= 1e6
+WHERE a.year = ${year} AND a.pim >= 1e6
 QUALIFY ROW_NUMBER() OVER (PARTITION BY e.nivel ORDER BY a.avance) <= 5
 ORDER BY e.nivel, a.avance;`;
   main.innerHTML = `<h1>${esc(t("ranking.titulo"))}</h1>
@@ -671,11 +674,26 @@ function wireSearch() {
   const links = () => [...list.querySelectorAll("a[href]")];
   const highlight = () => links().forEach((a, i) => a.setAttribute("aria-selected", String(i === active)));
   input.addEventListener("input", async () => {
-    index ??= (await load("buscador.json")).map((e) => ({ ...e, key: norm(`${e.n} ${e.d ?? ""} ${e.p ?? ""}`) }));
+    index ??= (await load("buscador.json")).map((e) => {
+      const lugar = norm(e.n.replace(PREFIX, ""));
+      return { ...e, lugar, palabras: lugar.split(/[\s-]+/), key: norm(`${e.n} ${e.d ?? ""} ${e.p ?? ""}`) };
+    });
     const terms = norm(input.value).split(/\s+/).filter(Boolean);
     if (!terms.length) { close(); return; }
+    // Prioridad: nombre exacto, nombre que empieza con lo escrito, una palabra del nombre que
+    // empieza con lo escrito, y al final coincidencias dentro de palabras o en la provincia.
+    const query = terms.join(" ");
+    const rank = (e) => {
+      if (e.lugar === query) return 0;
+      if (e.lugar.startsWith(query)) return 1;
+      if (terms.every((word) => e.palabras.some((p) => p.startsWith(word)))) return 2;
+      if (terms.every((word) => e.lugar.includes(word))) return 3;
+      return 4;
+    };
     const hits = index.filter((e) => terms.every((word) => e.key.includes(word)))
-      .sort((a, b) => a.n.length - b.n.length).slice(0, 6);
+      .map((e) => ({ e, r: rank(e) }))
+      .sort((a, b) => a.r - b.r || a.e.lugar.length - b.e.lugar.length)
+      .slice(0, 8).map((x) => x.e);
     list.innerHTML = hits.length
       ? hits.map((e) => `<li><a href="${entityHref(e.id, e.n)}">${esc(title(e.n))} <small>· ${esc(e.v === "M" && e.d ? `${title(e.p)}, ${title(e.d)}` : t(`nivel.${e.v}`))}</small></a></li>`).join("")
       : `<li><a>${esc(t("buscar.vacio"))}</a></li>`;
@@ -705,13 +723,20 @@ function wireSearch() {
 
 /* ---------- Tema e idioma ---------- */
 function wireTheme() {
-  const buttons = document.querySelectorAll("[data-tema]");
-  const mark = () => buttons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tema === document.documentElement.dataset.theme)));
-  buttons.forEach((b) => b.addEventListener("click", () => {
-    document.documentElement.dataset.theme = b.dataset.tema;
-    try { localStorage.setItem("pst-tema", b.dataset.tema); } catch { /* sin almacenamiento */ }
+  const button = document.getElementById("tema");
+  const mark = () => {
+    const dark = document.documentElement.dataset.theme === "oscuro";
+    const label = t(dark ? "tema.aClaro" : "tema.aOscuro");
+    button.setAttribute("aria-label", label);
+    button.title = label;
+  };
+  button.addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "oscuro" ? "claro" : "oscuro";
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem("pst-tema", next); } catch { /* sin almacenamiento */ }
     mark();
-  }));
+  });
+  document.addEventListener("pst:idioma", mark);
   mark();
 }
 
@@ -741,22 +766,43 @@ function footer() {
 }
 
 /* ---------- Tooltip ---------- */
+// Aparece solo con el mouse sobre el contenido de una fila (nombre, barra, valor) o al llegar
+// con el teclado; se oculta al salir de ella, al hacer scroll o al sacar el mouse de la pagina.
 const tip = document.getElementById("tip");
+let tipNode = null;
 function showTip(node, x, y) {
-  tip.textContent = node.dataset.tip; tip.hidden = false;
+  tipNode = node;
+  tip.textContent = node.dataset.tip;
+  tip.hidden = false;
   const w = tip.offsetWidth;
   tip.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, x - w / 2))}px`;
   tip.style.top = `${Math.max(8, y - tip.offsetHeight - 12)}px`;
 }
-document.addEventListener("mousemove", (ev) => {
-  const node = ev.target.closest?.("[data-tip]");
-  if (node) showTip(node, ev.clientX, ev.clientY); else tip.hidden = true;
+function hideTip() { tip.hidden = true; tipNode = null; }
+function tipTarget(target) {
+  const node = target.closest?.("[data-tip]");
+  if (!node) return null;
+  // En las filas de una lista, el espacio vacio alrededor del contenido no muestra nada.
+  if (node.tagName === "LI" && target === node) return null;
+  return node;
+}
+document.addEventListener("pointermove", (ev) => {
+  if (ev.pointerType === "touch") return;
+  const node = tipTarget(ev.target);
+  if (node) showTip(node, ev.clientX, ev.clientY); else if (tipNode) hideTip();
 });
+document.addEventListener("pointerout", (ev) => { if (!ev.relatedTarget) hideTip(); });
 document.addEventListener("focusin", (ev) => {
   const node = ev.target.closest?.("[data-tip]");
-  if (node) { const b = node.getBoundingClientRect(); showTip(node, b.left + b.width / 2, b.top); }
+  // Solo con el teclado: un clic deja el foco en la fila, pero no debe dejar el recuadro abierto.
+  if (node && node.matches(":focus-visible")) {
+    const b = node.getBoundingClientRect();
+    showTip(node, b.left + b.width / 2, b.top);
+  }
 });
-document.addEventListener("focusout", () => { tip.hidden = true; });
+document.addEventListener("focusout", hideTip);
+addEventListener("scroll", hideTip, { passive: true });
+addEventListener("blur", hideTip);
 
 /* ---------- Botones "Ver SQL" ---------- */
 main.addEventListener("click", (ev) => {
@@ -776,7 +822,10 @@ async function route() {
   });
   main.innerHTML = `<p class="loading">${esc(t("cargando"))}</p>`;
   try {
-    meta ??= await load("meta.json");
+    if (!meta) {
+      meta = await load("meta.json");
+      setDataVersion(meta.actualizado);
+    }
     if (section === "entidad") await entity(arg);
     else if (section === "obras") await obras(params);
     else if (section === "ranking") await ranking();

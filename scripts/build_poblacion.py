@@ -74,7 +74,7 @@ def convert(path: Path) -> list[dict]:
                 "departamento": departamento,
                 "provincia": provincia if nivel != "departamento" else None,
                 "distrito": name if nivel == "distrito" else None,
-                "ano": year,
+                "year": year,
                 "poblacion": int(float(value)),
             })
     return records

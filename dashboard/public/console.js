@@ -160,7 +160,7 @@ const HISTORY_KEY = "pst-historial";
 const STORE_KEY = "pst-consola";
 const WIDTH_KEY = "pst-consola-ancho";
 const REPO = "https://github.com/RenzoAL7/peru-spend-tracker/blob/main/";
-const RAW_NUMBER = /^(ano|año|.*_ano|mes|codigo|ubigeo|decil_pim|anos_con_presupuesto|puesto|.*_id)$/i;
+const RAW_NUMBER = /^(year|ano|.*_year|first_year|last_year|mes|codigo|ubigeo|decil_pim|anios_con_presupuesto|puesto|.*_id)$/i;
 const MONEY = /^(pia|pim|devengado|girado|certificado|comprometido|sin_ejecutar|pim_anual|devengado_acumulado|pim_minimo_grupo|pim_maximo_grupo|devengado_por_habitante|soles_por_habitante)$/i;
 const RATIO = /^(avance|avance_acumulado|mediana_avance|percentil_avance)$/i;
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
@@ -174,7 +174,7 @@ SELECT funcion,
        ROUND(devengado / 1e6, 1) AS gastado_millones,
        ROUND(100 * devengado / SUM(devengado) OVER (), 1) AS participacion_pct
 FROM mart_nacional_funcion
-WHERE ano = ${y}
+WHERE year = ${y}
 ORDER BY devengado DESC;`,
   },
   {
@@ -185,7 +185,7 @@ SELECT departamento,
        ROUND(devengado / 1e6, 1) AS gastado_millones,
        ROUND(100 * devengado / pim, 1) AS avance_pct
 FROM mart_region_anual
-WHERE ano = ${y} AND pim > 0
+WHERE year = ${y} AND pim > 0
 ORDER BY avance_pct DESC;`,
   },
   {
@@ -196,7 +196,7 @@ SELECT departamento,
        ROUND(devengado_por_habitante) AS soles_por_habitante,
        ROUND(100 * avance, 1) AS avance_pct
 FROM mart_region_anual
-WHERE ano = ${Math.max(y, 2018)} AND poblacion IS NOT NULL
+WHERE year = ${Math.max(y, 2018)} AND poblacion IS NOT NULL
 ORDER BY soles_por_habitante DESC;`,
   },
   {
@@ -205,7 +205,7 @@ ORDER BY soles_por_habitante DESC;`,
 SELECT mes,
        ROUND(100 * SUM(devengado_acumulado) / SUM(pim_anual), 1) AS avance_acumulado_pct
 FROM mart_mensual
-WHERE ano = ${y}
+WHERE year = ${y}
 GROUP BY mes
 ORDER BY mes;`,
   },
@@ -213,31 +213,31 @@ ORDER BY mes;`,
     id: "anual", table: "mart_nacional_funcion",
     sql: () => `${c("c.anual")}
 WITH anual AS (
-  SELECT f.ano, SUM(f.pim) AS pim, SUM(f.devengado) AS gastado
+  SELECT f.year, SUM(f.pim) AS pim, SUM(f.devengado) AS gastado
   FROM mart_nacional_funcion f
-  JOIN mart_cobertura c USING (ano)
+  JOIN mart_cobertura c USING (year)
   WHERE c.estado = 'completo' AND c.ultimo_mes_con_gasto = 12
-  GROUP BY f.ano
+  GROUP BY f.year
 )
-SELECT ano,
+SELECT year,
        ROUND(gastado / 1e9, 2) AS gastado_mil_millones,
        ROUND(100 * gastado / pim, 1) AS avance_pct,
-       ROUND(100 * (gastado / LAG(gastado) OVER (ORDER BY ano) - 1), 1) AS variacion_pct
+       ROUND(100 * (gastado / LAG(gastado) OVER (ORDER BY year) - 1), 1) AS variacion_pct
 FROM anual
-ORDER BY ano;`,
+ORDER BY year;`,
   },
   {
     id: "top3", table: "mart_nacional_funcion",
     sql: () => `${c("c.top3")}
-SELECT ano, puesto, funcion, gastado_millones
+SELECT year, puesto, funcion, gastado_millones
 FROM (
-  SELECT ano, funcion,
+  SELECT year, funcion,
          ROUND(devengado / 1e6, 1) AS gastado_millones,
-         RANK() OVER (PARTITION BY ano ORDER BY devengado DESC) AS puesto
+         RANK() OVER (PARTITION BY year ORDER BY devengado DESC) AS puesto
   FROM mart_nacional_funcion
 )
 WHERE puesto <= 3
-ORDER BY ano DESC, puesto;`,
+ORDER BY year DESC, puesto;`,
   },
   {
     id: "obras", table: "mart_proyecto",
@@ -249,7 +249,7 @@ SELECT p.nombre AS obra,
        ROUND(100 * p.avance, 1) AS avance_pct
 FROM mart_proyecto p
 JOIN mart_entidad e USING (entidad_id)
-WHERE p.ano = ${y}
+WHERE p.year = ${y}
 ORDER BY p.sin_ejecutar DESC
 LIMIT 25;`,
   },
@@ -260,7 +260,7 @@ SELECT departamento,
        nombre AS obra,
        ROUND(sin_ejecutar / 1e6, 1) AS sin_ejecutar_millones
 FROM mart_proyecto
-WHERE ano = ${y}
+WHERE year = ${y}
 QUALIFY ROW_NUMBER() OVER (PARTITION BY departamento ORDER BY sin_ejecutar DESC) <= 3
 ORDER BY departamento, sin_ejecutar_millones DESC;`,
   },
@@ -270,13 +270,13 @@ ORDER BY departamento, sin_ejecutar_millones DESC;`,
 SELECT p.codigo,
        ANY_VALUE(p.nombre) AS obra,
        ANY_VALUE(e.nombre) AS entidad,
-       COUNT(DISTINCT p.ano) AS anos_con_presupuesto,
+       COUNT(DISTINCT p.year) AS anios_con_presupuesto,
        ROUND(SUM(p.pim) / 1e6, 1) AS pim_sumado_millones,
        ROUND(100 * SUM(p.devengado) / SUM(p.pim), 1) AS avance_pct
 FROM mart_proyecto p
 JOIN mart_entidad e USING (entidad_id)
 GROUP BY p.codigo
-HAVING COUNT(DISTINCT p.ano) >= 3 AND SUM(p.devengado) / SUM(p.pim) < 0.3
+HAVING COUNT(DISTINCT p.year) >= 3 AND SUM(p.devengado) / SUM(p.pim) < 0.3
 ORDER BY pim_sumado_millones DESC
 LIMIT 25;`,
   },
@@ -284,8 +284,8 @@ LIMIT 25;`,
     id: "mejoraron", table: "mart_entidad_anual",
     sql: (y) => `${c("c.mejoraron")}
 WITH anual AS (
-  SELECT entidad_id, ano, pim, avance,
-         LAG(avance) OVER (PARTITION BY entidad_id ORDER BY ano) AS avance_previo
+  SELECT entidad_id, year, pim, avance,
+         LAG(avance) OVER (PARTITION BY entidad_id ORDER BY year) AS avance_previo
   FROM mart_entidad_anual
 )
 SELECT e.nombre,
@@ -295,7 +295,7 @@ SELECT e.nombre,
        ROUND(100 * (a.avance - a.avance_previo), 1) AS mejora_puntos
 FROM anual a
 JOIN mart_entidad e USING (entidad_id)
-WHERE a.ano = ${y} AND e.nivel = 'M' AND a.pim >= 5e6 AND a.avance_previo IS NOT NULL
+WHERE a.year = ${y} AND e.nivel = 'M' AND a.pim >= 5e6 AND a.avance_previo IS NOT NULL
 ORDER BY mejora_puntos DESC
 LIMIT 20;`,
   },
@@ -306,31 +306,31 @@ SELECT fuente_nombre,
        ROUND(SUM(pim) / 1e9, 2) AS presupuesto_mil_millones,
        ROUND(100 * SUM(devengado) / SUM(pim), 1) AS avance_pct
 FROM mart_fuente
-WHERE ano = ${y}
+WHERE year = ${y}
 GROUP BY fuente_nombre
 ORDER BY presupuesto_mil_millones DESC;`,
   },
   {
     id: "calidad", table: "mart_cobertura",
     sql: () => `${c("c.calidad")}
-SELECT ano, estado, filas_totales, filas_rechazadas, ultimo_mes_con_gasto
+SELECT year, estado, filas_totales, filas_rechazadas, ultimo_mes_con_gasto
 FROM mart_cobertura
-ORDER BY ano DESC;`,
+ORDER BY year DESC;`,
   },
 ];
 
 export const entitySql = (id) => `${c("c.entidad")}
-SELECT a.ano,
+SELECT a.year,
        ROUND(a.pim / 1e6, 2) AS presupuesto_millones,
        ROUND(a.devengado / 1e6, 2) AS gastado_millones,
        ROUND(100 * a.avance, 1) AS avance_pct,
        ROUND(a.devengado_por_habitante) AS soles_por_habitante,
        COUNT(p.codigo) AS obras
 FROM mart_entidad_anual a
-LEFT JOIN mart_proyecto p USING (entidad_id, ano)
+LEFT JOIN mart_proyecto p USING (entidad_id, year)
 WHERE a.entidad_id = '${id.replace(/'/g, "''")}'
 GROUP BY ALL
-ORDER BY a.ano DESC;`;
+ORDER BY a.year DESC;`;
 
 // Retos con una solucion de referencia. Se elige uno por dia.
 const RETOS = [
@@ -339,7 +339,7 @@ const RETOS = [
     en: "Which department spent the most per resident in {y}?",
     sql: (y) => `SELECT departamento, ROUND(devengado_por_habitante) AS soles_por_habitante
 FROM mart_region_anual
-WHERE ano = ${y} AND poblacion IS NOT NULL
+WHERE year = ${y} AND poblacion IS NOT NULL
 ORDER BY soles_por_habitante DESC
 LIMIT 1;`,
   },
@@ -349,7 +349,7 @@ LIMIT 1;`,
     sql: (y) => `SELECT COUNT(*) AS municipalidades
 FROM mart_entidad_anual a
 JOIN mart_entidad e USING (entidad_id)
-WHERE a.ano = ${y} AND e.nivel = 'M' AND a.avance < 0.5;`,
+WHERE a.year = ${y} AND e.nivel = 'M' AND a.avance < 0.5;`,
   },
   {
     es: "¿Qué gobierno regional tuvo el mayor avance en {y}?",
@@ -358,7 +358,7 @@ WHERE a.ano = ${y} AND e.nivel = 'M' AND a.avance < 0.5;`,
 FROM mart_entidad_anual a
 JOIN mart_entidad e USING (entidad_id)
 JOIN mart_entidad_territorio t USING (entidad_id)
-WHERE a.ano = ${y} AND t.territorio = 'departamento'
+WHERE a.year = ${y} AND t.territorio = 'departamento'
 ORDER BY a.avance DESC
 LIMIT 1;`,
   },
@@ -367,14 +367,14 @@ LIMIT 1;`,
     en: "What share of the {y} budget came from borrowing?",
     sql: (y) => `SELECT ROUND(100 * SUM(pim) FILTER (WHERE fuente_nombre LIKE '%CREDITO%') / SUM(pim), 1) AS endeudamiento_pct
 FROM mart_fuente
-WHERE ano = ${y};`,
+WHERE year = ${y};`,
   },
   {
     es: "¿En qué mes de {y} se gastó más dinero?",
     en: "In which month of {y} was the most money spent?",
     sql: (y) => `SELECT mes, ROUND(SUM(devengado) / 1e9, 2) AS gastado_mil_millones
 FROM mart_mensual
-WHERE ano = ${y}
+WHERE year = ${y}
 GROUP BY mes
 ORDER BY gastado_mil_millones DESC
 LIMIT 1;`,
@@ -386,7 +386,7 @@ LIMIT 1;`,
 FROM mart_entidad_anual a
 JOIN mart_entidad e USING (entidad_id)
 JOIN mart_entidad_territorio t USING (entidad_id)
-WHERE a.ano = ${y} AND t.territorio = 'distrito' AND t.ubigeo LIKE '1501%'
+WHERE a.year = ${y} AND t.territorio = 'distrito' AND t.ubigeo LIKE '1501%'
 ORDER BY soles_por_habitante DESC
 LIMIT 1;`,
   },
@@ -394,11 +394,11 @@ LIMIT 1;`,
     es: "¿Qué función tuvo el mayor crecimiento de gasto entre 2019 y {y}?",
     en: "Which function had the largest spending growth between 2019 and {y}?",
     sql: (y) => `SELECT funcion,
-       ROUND(100 * (MAX(devengado) FILTER (WHERE ano = ${y}) / MAX(devengado) FILTER (WHERE ano = 2019) - 1), 1) AS crecimiento_pct
+       ROUND(100 * (MAX(devengado) FILTER (WHERE year = ${y}) / MAX(devengado) FILTER (WHERE year = 2019) - 1), 1) AS crecimiento_pct
 FROM mart_nacional_funcion
-WHERE ano IN (2019, ${y})
+WHERE year IN (2019, ${y})
 GROUP BY funcion
-HAVING MAX(devengado) FILTER (WHERE ano = 2019) > 1e9
+HAVING MAX(devengado) FILTER (WHERE year = 2019) > 1e9
 ORDER BY crecimiento_pct DESC
 LIMIT 1;`,
   },
@@ -407,7 +407,7 @@ LIMIT 1;`,
     en: "Which public work in Cusco had the most unspent money in {y}?",
     sql: (y) => `SELECT nombre, ROUND(sin_ejecutar / 1e6, 1) AS sin_ejecutar_millones
 FROM mart_proyecto
-WHERE ano = ${y} AND departamento = 'CUSCO'
+WHERE year = ${y} AND departamento = 'CUSCO'
 ORDER BY sin_ejecutar DESC
 LIMIT 1;`,
   },
@@ -426,6 +426,12 @@ let closedYear = () => yearOf();
 let hasRun = false;
 let opener = null;
 let cancelRun = null;
+let dataVersion = "";
+
+/** Fecha de publicacion de los datos: se agrega a las URLs para no usar copias viejas. */
+export function setDataVersion(version) {
+  dataVersion = version ? `?v=${encodeURIComponent(version)}` : "";
+}
 
 const narrow = () => matchMedia("(max-width: 1020px)").matches;
 const store = {
@@ -475,7 +481,7 @@ async function loadEditor() {
 
 /* ---------- Catalogo y motor ---------- */
 function loadCatalog() {
-  catalogReady ??= fetch("data/sql/catalogo.json").then((response) => {
+  catalogReady ??= fetch(`data/sql/catalogo.json${dataVersion}`).then((response) => {
     if (!response.ok) throw new Error(String(response.status));
     return response.json();
   }).then((tables) => { catalog = tables; return tables; })
@@ -501,7 +507,7 @@ async function startEngine() {
     await conn.query(`SET custom_extension_repository = '${new URL("extensions", base).href}'`);
     await conn.query("LOAD parquet");
     for (const { tabla } of catalog) {
-      const url = new URL(`data/sql/${tabla}.parquet`, document.baseURI).href;
+      const url = new URL(`data/sql/${tabla}.parquet${dataVersion}`, document.baseURI).href;
       await db.registerFileURL(`${tabla}.parquet`, url, duckdb.DuckDBDataProtocol.HTTP, false);
       await conn.query(`CREATE VIEW ${tabla} AS SELECT * FROM read_parquet('${tabla}.parquet')`);
     }
@@ -625,7 +631,7 @@ function renderTable(result) {
 function chartSpec(result) {
   if (!result.rows.length) return null;
   const types = result.types;
-  const isTime = (col) => /^(ano|mes)$/i.test(col);
+  const isTime = (col) => /^(year|ano|mes)$/i.test(col);
   const label = result.columns.find((col) => isTime(col)) ?? result.columns.find((col) => types[col] === "text");
   const values = result.columns.filter((col) => col !== label && ["money", "ratio", "number"].includes(types[col]));
   if (!label || !values.length) return null;

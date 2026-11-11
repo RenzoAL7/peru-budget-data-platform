@@ -78,6 +78,9 @@ docker run --rm -p 8088:8080 -v "$DATA_DIR/published:/data/published:ro" site
 
 ## Página
 
+- **Nombre del año:** silver guarda la columna como `ano` (no se reprocesa). La macro `silver()` la renombra a `year` al leer, así que todos los marts y las tablas de la consola usan `year` (y `first_year` / `last_year` en `mart_entidad`). Los JSON internos de la página siguen usando `ano`.
+- **Datos sin copias viejas:** `meta.json` se revalida en cada visita y el resto de `/data/` se pide con `?v=<fecha de publicación>`, así una actualización se ve de inmediato.
+
 - **Rutas:** `/`, `/obras`, `/ranking`, `/como-funciona` y `/entidad/<id>-<nombre>`. nginx sirve `index.html` en esas rutas; cualquier otra da 404. Los enlaces antiguos con `#/` se redirigen en el navegador. El estado de cada vista va en la URL: `?ano=`, `?mapa=habitante`, `?dep=&prov=&dist=`, `?lang=en` y `?sql=`.
 - **Por la IP:** la página usa `<base href="/">` y nginx lo cambia por `/presupuesto/` en esa ruta, así los mismos archivos sirven en ambos lugares.
 - **Idiomas:** español e inglés en `dashboard/public/i18n.js`. Los nombres de entidades y lugares no se traducen; las funciones del MEF sí.

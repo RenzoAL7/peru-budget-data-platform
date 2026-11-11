@@ -26,7 +26,7 @@ def test_sin_anios_confiables_no_publica():
 def test_exporta_los_marts_a_parquet_para_la_consola(tmp_path):
     con = duckdb.connect()
     for table in SQL_TABLES:
-        con.execute(f"CREATE TABLE {table} AS SELECT 2025 AS ano, 1.5::DECIMAL(38, 2) AS pim")
+        con.execute(f"CREATE TABLE {table} AS SELECT 2025 AS year, 1.5::DECIMAL(38, 2) AS pim")
     con.execute("INSERT INTO mart_proyecto VALUES (2024, 3)")
 
     catalog = export_sql_tables(con, tmp_path / "sql")
@@ -35,7 +35,7 @@ def test_exporta_los_marts_a_parquet_para_la_consola(tmp_path):
     proyecto = next(c for c in catalog if c["tabla"] == "mart_proyecto")
     assert proyecto["filas"] == 2
     assert proyecto["columnas"] == [
-        {"nombre": "ano", "tipo": "INTEGER"},
+        {"nombre": "year", "tipo": "INTEGER"},
         {"nombre": "pim", "tipo": "DECIMAL(38,2)"},
     ]
     parquet = tmp_path / "sql" / "mart_proyecto.parquet"

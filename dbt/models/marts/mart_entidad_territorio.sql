@@ -35,7 +35,7 @@ entidad as (
 inei as (
     select ubigeo, nivel, provincia, distrito
     from {{ ref('poblacion_inei') }}
-    where ano = (select max(ano) from {{ ref('poblacion_inei') }})
+    where year = (select max(year) from {{ ref('poblacion_inei') }})
 ),
 
 candidatos as (
