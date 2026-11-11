@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
+import logging
 import os
+import urllib.request
 from datetime import datetime, timedelta
 
 from airflow.providers.cncf.kubernetes.operators.pod import KubernetesPodOperator
@@ -33,6 +36,34 @@ DEFAULTS = {
     "retry_delay": timedelta(minutes=15),
     "execution_timeout": timedelta(hours=6),
 }
+
+
+def notify_failure(context) -> None:
+    """Avisa por webhook cuando una ejecucion falla (ntfy.sh, Slack o Discord).
+
+    La URL va en ALERT_WEBHOOK_URL (secreto airflow-env). Sin ella no se envia nada.
+    """
+    url = os.getenv("ALERT_WEBHOOK_URL", "").strip()
+    if not url:
+        return
+    run = context.get("dag_run")
+    failed = [ti.task_id for ti in run.get_task_instances(state="failed")] if run else []
+    text = (
+        f"Peru Spend Tracker: fallo {run.dag_id if run else 'un DAG'}"
+        f" ({run.run_id if run else ''}). Pasos con error: {', '.join(failed) or 'sin detalle'}."
+    )
+    if "ntfy" in url:
+        body, kind = text.encode(), "text/plain; charset=utf-8"
+    else:
+        # Slack lee "text" y Discord lee "content".
+        body, kind = json.dumps({"text": text, "content": text}).encode(), "application/json"
+    request = urllib.request.Request(url, data=body, headers={"Content-Type": kind}, method="POST")
+    try:
+        urllib.request.urlopen(request, timeout=10).close()
+    except OSError as error:
+        logging.getLogger(__name__).warning("No se pudo enviar la alerta: %s", error)
+
+
 # El buscador guarda el modelo en el subdirectorio models de este mismo volumen.
 MODEL_CACHE = {"FASTEMBED_CACHE_PATH": "/data/models"}
 
@@ -91,6 +122,7 @@ with DAG(
     catchup=False,
     max_active_runs=1,
     default_args=DEFAULTS,
+    on_failure_callback=notify_failure,
     tags=["mef", "produccion"],
 ):
     pipeline(["--recent", "3"])
@@ -103,6 +135,7 @@ with DAG(
     catchup=False,
     max_active_runs=1,
     default_args=DEFAULTS,
+    on_failure_callback=notify_failure,
     tags=["mef", "produccion"],
 ):
     pipeline([])

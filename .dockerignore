@@ -1,0 +1,17 @@
+# Contexto de las imagenes: solo el codigo. Las dependencias se instalan dentro de cada imagen.
+.git
+.github
+.venv
+.airflow
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+data
+dbt/target
+dbt/logs
+dbt/dbt_packages
+dashboard/node_modules
+dashboard/public/vendor
+*.duckdb
+*.duckdb.wal
+.env

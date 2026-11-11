@@ -2,7 +2,7 @@
 
 Data platform that turns Peru's official public spending files into a website anyone can use.
 
-Search for a municipality, region, or ministry and see how much money it had, how much it spent, what it spent it on, and which public works were left unfinished. A SQL console next to every chart runs DuckDB in the browser against the same marts, so anyone can check the numbers or ask their own questions.
+Search for a municipality, region, or ministry and see how much money it had, how much it spent, what it spent it on, how it compares with similar entities, how much it spent per resident, and which public works were left unfinished. A SQL console next to every chart runs DuckDB in the browser against the same marts, so anyone can check the numbers or ask their own questions. The site is available in Spanish and English.
 
 **Live site:** https://peru-spend-tracker.renzoaguilar.dev
 
@@ -18,8 +18,9 @@ Search for a municipality, region, or ministry and see how much money it had, ho
 ## Highlights
 
 - Built an end-to-end ELT pipeline in Python and SQL that processes 150.4M official spending records from Peru's Ministry of Economy and Finance (2009–2026), reducing 140+ GB of CSV to 4.4 GB of Parquet and serving 2,154 public entities through a public website.
-- Modeled a medallion warehouse on DuckDB with 10 dbt models and SQL data-quality tests, using OCI Object Storage as the data lake; added schema contracts plus row-count and financial reconciliation, which flagged truncated official files for 2016–2017 and matched enacted budget laws for 2014, 2015, 2024, and 2025.
-- Shipped an in-browser SQL console with DuckDB-WASM that queries the published gold marts as Parquet over HTTP range requests, with every chart linked to the query that produces it and a strict same-origin Content Security Policy.
+- Modeled a medallion warehouse on DuckDB with 14 dbt models, an INEI population seed, and SQL data-quality tests, using OCI Object Storage as the data lake; added schema contracts plus row-count and financial reconciliation, which flagged truncated official files for 2016–2017 and matched enacted budget laws for 2014, 2015, 2024, and 2025.
+- Shipped an in-browser SQL console with DuckDB-WASM that queries the published gold marts as Parquet over HTTP range requests, with a CodeMirror editor, schema autocomplete, EXPLAIN plans, automatic charts, CSV export, shareable query links, and every chart on the page linked to the query that produces it, all under a strict Content Security Policy.
+- Matched 1,694 of 1,698 district municipalities to INEI population data by fuzzy name matching (Jaro-Winkler) inside dbt, enabling spending per resident and peer comparisons by budget size.
 - Orchestrated incremental loads with Apache Airflow on K3s, with task dependencies, retries, and stage-level recovery; shipped ARM64 images built on native ARM runners through GitHub Actions and Argo CD, and added semantic search across 110,645 public works using a multilingual ONNX model.
 
 ## Architecture
@@ -54,6 +55,7 @@ flowchart LR
 | Publishing | Nginx, Traefik, Cloudflare | Static website in a cluster pod, served over HTTPS on its own domain |
 | SQL console | DuckDB-WASM, Parquet | Read-only queries over the gold marts, run entirely in the visitor's browser |
 | Deployment | GitHub Actions, GHCR, Argo CD | ARM64 images built on native runners, pinned by digest |
+| Monitoring | GitHub Actions, webhooks | Site checks every 3 hours that open an issue, and DAG failure alerts |
 
 ## AI model
 
@@ -69,7 +71,7 @@ The model does not generate text. It only ranks public works by similarity.
 
 ## Data models
 
-A medallion architecture with 10 dbt models on DuckDB.
+A medallion architecture with 14 dbt models on DuckDB, plus a seed with INEI population projections (2018–2026).
 
 | Layer | Model | Content |
 |---|---|---|
@@ -83,6 +85,10 @@ A medallion architecture with 10 dbt models on DuckDB.
 | Gold | `mart_proyecto` | Budget versus execution for each public work |
 | Gold | `mart_region_anual` | Spending within each department |
 | Gold | `mart_nacional_funcion` | National spending distribution |
+| Gold | `mart_entidad_territorio` | INEI district, province, or department served by each entity |
+| Gold | `mart_entidad_pares` | Each entity against others of the same type and budget decile |
+| Gold | `mart_mensual` | Cumulative spending through the year, by month |
+| Gold | `mart_fuente` | Budget and spending by funding source |
 
 The private OCI Object Storage bucket is organized as follows:
 
@@ -107,7 +113,7 @@ As an external check, the initial budget calculated for 2014 (S/ 118,934 million
 ## Limitations
 
 - The cluster has a single node, so a VM outage takes down the website and search. The lake remains in the bucket.
-- The VM has little free disk space and each yearly CSV takes up to 10 GB. For that reason, the initial load was processed outside the cluster and the Airflow DAGs are paused until storage is expanded.
+- The initial load was processed outside the cluster because each yearly CSV takes up to 10 GB. The VM disk has since been expanded to 100 GB; the Airflow DAGs run once the bucket credentials are stored in the cluster.
 - A month counts as having data once the ministry has published it, so the current year is always partial.
 
 ## Engineering decisions

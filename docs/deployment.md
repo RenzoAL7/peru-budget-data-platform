@@ -39,7 +39,7 @@ Antes de activar los DAGs:
 
 1. Agrega las claves S3 a `gasto-secrets`. Sin ellas, los DAGs fallan en su primer paso.
 2. Desde la máquina que hizo la carga, sube los manifiestos con `gasto push --layers manifests`. Sin ellos, los DAGs vuelven a descargar los CSV del MEF.
-3. Deja al menos 15 GB libres en la VM, además del espacio para bronze (4.4 GB) y silver. Cada CSV anual ocupa hasta 10 GB y llenar el disco afectaría a todo el clúster.
+3. Deja al menos 15 GB libres en la VM, además del espacio para bronze (4.4 GB) y silver. Cada CSV anual ocupa hasta 10 GB y llenar el disco afectaría a todo el clúster. El volumen de arranque se amplió a 100 GB el 10 de noviembre de 2026 (`/usr/libexec/oci-growfs -y`, sin reiniciar): quedan unos 60 GB libres.
 
 Cada corrida empieza con `gasto pull --missing-only`, que restaura lo que falte en el volumen sin reemplazar archivos locales. `gasto gold --require-history` falla si falta algún año cerrado en silver, para no publicar un histórico recortado. La ingesta se detiene si una descarga dejaría menos de 5 GB libres.
 
@@ -63,8 +63,11 @@ La columna derecha del sitio ejecuta DuckDB-WASM en el navegador de cada visitan
 
 - **Dependencias:** `dashboard/package.json` fija DuckDB-WASM, esbuild y las fuentes. La imagen del sitio corre `node vendor.mjs` en una etapa de Node y copia el resultado a `vendor/`. Esa carpeta no se versiona.
 - **Extensión Parquet:** DuckDB-WASM la descarga de `extensions.duckdb.org`, pero la CSP solo permite el mismo origen. Por eso `vendor.mjs` la descarga al construir la imagen, verifica su SHA-256 y la sirve desde el sitio. Al subir la versión de `@duckdb/duckdb-wasm`, actualiza `DUCKDB_CORE` y el hash en `vendor.mjs`, y la ruta que revisa `images.yml`.
-- **Peso:** el motor pesa unos 8 MB comprimido y el navegador lo guarda en caché. En pantallas anchas se descarga al abrir la página; en celulares, al ejecutar la primera consulta.
-- **Seguridad:** la CSP agrega `'wasm-unsafe-eval'`, que permite compilar WebAssembly pero no habilita `eval()`. `connect-src 'self'` impide que una consulta lea URLs de otros sitios.
+- **Peso:** el motor pesa unos 8 MB comprimido y el editor unos 150 KB. Ninguno se descarga hasta abrir la consola (botón **SQL** o cualquier **Ver SQL**). En pantallas anchas se recuerda si quedó abierta.
+- **Editor:** CodeMirror con autocompletado de tablas y columnas (`catalogo.json`) y formato con `sql-formatter`. Vive dentro de un Shadow DOM: así CodeMirror usa hojas de estilo construidas, que la CSP permite, en vez de etiquetas `<style>` en línea.
+- **Funciones:** ejemplos con CTE, `LAG`, `RANK`, `QUALIFY` y `JOIN`; historial en el navegador; `EXPLAIN`; gráfico automático del resultado; orden y paginación; descarga en CSV; copia en Markdown; enlaces compartibles (`?sql=` en base64url); un reto distinto cada día; y el linaje de cada mart enlazado a su modelo en GitHub.
+- **Divisor:** en pantallas anchas la línea entre la página y la consola se arrastra (de 360 px al 60 % de la pantalla). Arrastrarla hasta el borde derecho cierra la consola. También responde a las flechas del teclado.
+- **Seguridad:** la CSP agrega `'wasm-unsafe-eval'`, que permite compilar WebAssembly pero no habilita `eval()`. `connect-src` solo permite el propio sitio y la analítica sin cookies de Cloudflare, así que una consulta no puede leer URLs de otros sitios.
 
 Para probar el sitio en local, la imagen arma `vendor/` sola. Para servir `dashboard/public` sin Docker, antes corre `cd dashboard && npm ci && npm run vendor`.
 
@@ -72,6 +75,23 @@ Para probar el sitio en local, la imagen arma `vendor/` sola. Para servir `dashb
 docker build -f docker/site.Dockerfile -t site .
 docker run --rm -p 8088:8080 -v "$DATA_DIR/published:/data/published:ro" site
 ```
+
+## Página
+
+- **Rutas:** `/`, `/obras`, `/ranking`, `/como-funciona` y `/entidad/<id>-<nombre>`. nginx sirve `index.html` en esas rutas; cualquier otra da 404. Los enlaces antiguos con `#/` se redirigen en el navegador. El estado de cada vista va en la URL: `?ano=`, `?mapa=habitante`, `?dep=&prov=&dist=`, `?lang=en` y `?sql=`.
+- **Por la IP:** la página usa `<base href="/">` y nginx lo cambia por `/presupuesto/` en esa ruta, así los mismos archivos sirven en ambos lugares.
+- **Idiomas:** español e inglés en `dashboard/public/i18n.js`. Los nombres de entidades y lugares no se traducen; las funciones del MEF sí.
+- **Buscadores y redes:** `robots.txt` apunta a `data/sitemap.xml`, que `gasto publish` genera con todas las fichas (`SITE_URL`). Cada vista actualiza el título, la descripción y la URL canónica. `og.png` es la imagen al compartir; su plantilla está en `scripts/og.html`.
+- **Caché:** HTML, JS, CSS y las rutas de la página se revalidan en cada visita. Las URLs de CSS, JS, el editor y DuckDB llevan la versión del commit (`?v=dev` en el código, reemplazado al construir la imagen), así ningún navegador mezcla versiones. En Cloudflare, **Browser Cache TTL** debe quedar en **Respect Existing Headers**.
+- **Mapa:** `dashboard/public/mapa-peru.json` sale de geoBoundaries (PER ADM1, dominio público) con `scripts/build_map.py`.
+- **Población:** `dbt/seeds/poblacion_inei.csv` sale del cuadro del INEI "Población total proyectada al 30 de junio, 2018-2026" con `scripts/build_poblacion.py`. `mart_entidad_territorio` asigna a cada municipalidad su distrito o provincia por similitud de nombres (Jaro-Winkler) dentro del departamento; la prueba `cobertura_poblacion_municipal` avisa si baja del 95 %.
+- **Obras:** cada tarjeta enlaza a su ficha en el Sistema de Seguimiento de Inversiones del MEF (`ofi5.mef.gob.pe/ssi/Ssi/Index?codigo=<CUI>&tipo=2`).
+
+## Monitoreo y alertas
+
+- **Sitio:** `.github/workflows/monitor.yml` revisa cada 3 horas la portada, `/obras`, la búsqueda, el catálogo de la consola y que `data/meta.json` tenga menos de 3 días. Si algo falla, abre o actualiza un issue (GitHub lo notifica por correo) y lo cierra cuando todo vuelve a responder.
+- **DAGs:** si una ejecución falla, `notify_failure` envía un aviso a `ALERT_WEBHOOK_URL`, guardada en el secreto `airflow-env`. Sirve un tema privado de [ntfy.sh](https://ntfy.sh) (notificaciones en el celular), un webhook de Slack o uno de Discord. Sin esa variable no se envía nada.
+- **Disponibilidad:** `gasto-site` y `gasto-search` corren con dos réplicas y `RollingUpdate`. La cuota del namespace deja margen de memoria para que un despliegue coincida con un pod del pipeline.
 
 ## Búsqueda semántica
 

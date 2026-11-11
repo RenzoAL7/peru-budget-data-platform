@@ -12,7 +12,8 @@ kind: Deployment
 metadata:
   name: gasto-search
 spec:
-  replicas: 1
+  # Dos replicas: si un pod se reinicia, el otro sigue atendiendo.
+  replicas: 2
   # El pod nuevo arranca antes de retirar el viejo: la busqueda no se corta al desplegar.
   # Ambos leen el volumen en modo lectura en el mismo nodo; la cuota deja margen para los dos.
   strategy:

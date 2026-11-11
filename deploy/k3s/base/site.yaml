@@ -12,7 +12,8 @@ kind: Deployment
 metadata:
   name: gasto-site
 spec:
-  replicas: 1
+  # Dos replicas: si un pod se reinicia, el otro sigue atendiendo.
+  replicas: 2
   # El pod nuevo arranca antes de retirar el viejo: el sitio no se corta al desplegar.
   strategy:
     type: RollingUpdate

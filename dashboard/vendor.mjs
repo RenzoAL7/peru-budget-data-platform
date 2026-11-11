@@ -34,6 +34,17 @@ await build({
   outfile: join(out, "duckdb", "duckdb.js"),
 });
 
+// Editor SQL (CodeMirror y sql-formatter): un modulo aparte que se carga al abrir la consola.
+await build({
+  entryPoints: [join(here, "src", "editor-entry.js")],
+  bundle: true,
+  format: "esm",
+  minify: true,
+  target: "es2022",
+  legalComments: "linked",
+  outfile: join(out, "editor", "editor.js"),
+});
+
 // Solo la variante "eh" (excepciones nativas de WebAssembly), soportada por los navegadores actuales.
 for (const file of ["duckdb-eh.wasm", "duckdb-browser-eh.worker.js"]) {
   copyFileSync(join(duckdb, file), join(out, "duckdb", file));
@@ -45,17 +56,17 @@ writeFileSync(
     "Apache Arrow (incluido en duckdb.js): Apache License 2.0, https://arrow.apache.org\n",
 );
 
-const fonts = {
-  archivo: [400, 500, 600, 700, 800],
-  "ibm-plex-mono": [400, 500, 600],
-};
-for (const [family, weights] of Object.entries(fonts)) {
-  for (const weight of weights) {
-    const file = `${family}-latin-${weight}-normal.woff2`;
-    copyFileSync(join(modules, "@fontsource", family, "files", file), join(out, "fonts", file));
-  }
-  copyFileSync(join(modules, "@fontsource", family, "LICENSE"), join(out, "fonts", `${family}.LICENSE`));
+// Archivo variable: un solo archivo cubre todos los pesos (antes eran cinco).
+copyFileSync(
+  join(modules, "@fontsource-variable", "archivo", "files", "archivo-latin-wght-normal.woff2"),
+  join(out, "fonts", "archivo-latin-wght-normal.woff2"),
+);
+copyFileSync(join(modules, "@fontsource-variable", "archivo", "LICENSE"), join(out, "fonts", "archivo.LICENSE"));
+for (const weight of [400, 500, 600]) {
+  const file = `ibm-plex-mono-latin-${weight}-normal.woff2`;
+  copyFileSync(join(modules, "@fontsource", "ibm-plex-mono", "files", file), join(out, "fonts", file));
 }
+copyFileSync(join(modules, "@fontsource", "ibm-plex-mono", "LICENSE"), join(out, "fonts", "ibm-plex-mono.LICENSE"));
 
 const extDir = join(out, "duckdb", "extensions", DUCKDB_CORE, "wasm_eh");
 mkdirSync(extDir, { recursive: true });
@@ -73,8 +84,12 @@ for (const [name, sha256] of Object.entries(EXTENSIONS)) {
 }
 
 // nginx sirve estas copias comprimidas con gzip_static: el wasm baja de ~34 MB a ~8 MB.
-for (const file of ["duckdb.js", "duckdb-eh.wasm", "duckdb-browser-eh.worker.js", ...extFiles]) {
-  const path = join(out, "duckdb", file);
+const compressed = [
+  ...["duckdb.js", "duckdb-eh.wasm", "duckdb-browser-eh.worker.js", ...extFiles].map((f) => join("duckdb", f)),
+  join("editor", "editor.js"),
+];
+for (const file of compressed) {
+  const path = join(out, file);
   writeFileSync(`${path}.gz`, gzipSync(readFileSync(path), { level: 9 }));
 }
 console.log(`Dependencias copiadas en ${out}`);

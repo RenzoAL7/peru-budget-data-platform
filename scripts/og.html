@@ -1,0 +1,24 @@
+<!-- Imagen para compartir (dashboard/public/og.png). Requiere npm run vendor para las fuentes. Regenerar con:
+     "Brave Browser" --headless=new --hide-scrollbars --allow-file-access-from-files --window-size=1200,630 --screenshot=dashboard/public/og.png scripts/og.html -->
+<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:Archivo;font-weight:100 900;src:url(../dashboard/public/vendor/fonts/archivo-latin-wght-normal.woff2)}
+@font-face{font-family:Plex;font-weight:500;src:url(../dashboard/public/vendor/fonts/ibm-plex-mono-latin-500-normal.woff2)}
+*{box-sizing:border-box}html,body{margin:0;width:1200px;height:630px;overflow:hidden}
+body{background:#12171e;color:#e9edf2;font-family:Archivo,sans-serif;display:grid;grid-template-columns:1fr 360px;gap:48px;padding:64px 72px}
+.brand{display:flex;align-items:center;gap:14px;font-weight:800;font-size:30px;letter-spacing:-.02em}
+.mark{width:16px;height:34px;background:#f0667a}
+h1{margin:44px 0 0;font-size:62px;line-height:1.02;font-weight:800;letter-spacing:-.035em}
+p{margin:22px 0 0;color:#a3aebc;font-size:24px;line-height:1.35}
+.stats{display:flex;gap:28px;margin-top:40px;font-family:Plex;font-size:19px;color:#c6cfda}
+.stats b{display:block;color:#e9edf2;font-family:Archivo;font-size:32px;font-weight:800;letter-spacing:-.02em}
+.side{align-self:center;background:#0a0d11;border:1px solid #2a313b;padding:22px 24px;font-family:Plex;font-size:17px;line-height:1.55;color:#e7ebf0}
+.k{color:#f2b84b}.c{color:#7d8896}.n{color:#7fb2e5}
+.bars{margin-top:18px;display:grid;gap:9px}.bar{height:12px;background:#f2b84b}
+</style></head><body>
+<div><div class="brand"><span class="mark"></span>Peru Spend Tracker</div>
+<h1>¿En qué se gasta la plata de tus impuestos?</h1>
+<p>Presupuesto, gasto y obras de 2,154 entidades públicas del Perú, con datos oficiales del MEF.</p>
+<div class="stats"><span><b>150 M</b>registros</span><span><b>2009–2026</b>años</span><span><b>SQL</b>en tu navegador</span></div></div>
+<div class="side"><span class="c">-- DuckDB-WASM</span><br><span class="k">SELECT</span> departamento,<br>&nbsp;&nbsp;<span class="k">ROUND</span>(<span class="n">100</span> * avance, <span class="n">1</span>)<br><span class="k">FROM</span> mart_region_anual<br><span class="k">WHERE</span> ano = <span class="n">2025</span>;
+<div class="bars"><div class="bar" style="width:98%"></div><div class="bar" style="width:92%"></div><div class="bar" style="width:86%"></div><div class="bar" style="width:79%"></div><div class="bar" style="width:71%"></div></div></div>
+</body></html>

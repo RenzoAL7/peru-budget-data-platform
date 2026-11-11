@@ -1,0 +1,12 @@
+version: 2
+seeds:
+  - name: poblacion_inei
+    description: >
+      Poblacion proyectada al 30 de junio de cada anio (2018-2026) por departamento, provincia y
+      distrito. Fuente: INEI, cuadro N.o 01 publicado en gob.pe. Se regenera con
+      scripts/build_poblacion.py.
+    columns:
+      - name: ubigeo
+        data_tests: [not_null]
+      - name: poblacion
+        data_tests: [not_null]

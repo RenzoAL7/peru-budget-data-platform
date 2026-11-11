@@ -67,10 +67,22 @@ jobs:
               curl -fsS http://127.0.0.1:8088/ | grep -q "Peru Spend Tracker"
               curl -fsS http://127.0.0.1:8088/app.js > /dev/null
               curl -fsS http://127.0.0.1:8088/console.js > /dev/null
-              # Consola SQL: motor, extension Parquet y fuentes servidos desde el propio sitio.
+              # Rutas de la pagina: sirven index.html; por la IP, con <base> en /presupuesto/.
+              for path in obras ranking como-funciona entidad/M1-prueba; do
+                curl -fsS "http://127.0.0.1:8088/$path" | grep -q '<base href="/">'
+                curl -fsS "http://127.0.0.1:8088/presupuesto/$path" | grep -q '<base href="/presupuesto/">'
+              done
+              test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8088/no-existe)" = 404
+              # Las URLs de CSS y JS llevan la version del commit.
+              curl -fsS http://127.0.0.1:8088/ | grep -q "app.js?v=${GITHUB_SHA:0:12}"
+              ! curl -fsS http://127.0.0.1:8088/ | grep -q "?v=dev"
+              for path in og.png favicon.svg robots.txt mapa-peru.json; do
+                curl -fsS -o /dev/null "http://127.0.0.1:8088/$path"
+              done
+              # Consola SQL: motor, extension Parquet, editor y fuentes servidos desde el propio sitio.
               for path in duckdb/duckdb.js duckdb/duckdb-browser-eh.worker.js \
                 duckdb/extensions/v1.4.3/wasm_eh/parquet.duckdb_extension.wasm \
-                fonts/archivo-latin-800-normal.woff2; do
+                editor/editor.js fonts/archivo-latin-wght-normal.woff2; do
                 curl -fsS -o /dev/null "http://127.0.0.1:8088/vendor/$path"
               done
               curl -fsSI -H 'Accept-Encoding: gzip' http://127.0.0.1:8088/vendor/duckdb/duckdb-eh.wasm \
@@ -78,6 +90,7 @@ jobs:
               curl -fsSI http://127.0.0.1:8088/ | grep -qi "wasm-unsafe-eval"
               # HTML y JS se revalidan siempre, para no mezclar versiones tras un despliegue.
               curl -fsSI http://127.0.0.1:8088/app.js | tr -d '\r' | grep -qi '^cache-control: no-cache$'
+              curl -fsSI http://127.0.0.1:8088/obras | tr -d '\r' | grep -qi '^cache-control: no-cache$'
               test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8088/presupuesto)" = 301
               docker rm -f site-check
               ;;

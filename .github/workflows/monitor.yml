@@ -1,0 +1,81 @@
+name: Monitor
+
+# Revisa el sitio publico cada 3 horas. Si algo falla abre (o actualiza) un issue, que GitHub
+# notifica por correo; cuando todo vuelve a estar bien, lo cierra.
+on:
+  schedule:
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: monitor
+  cancel-in-progress: false
+
+jobs:
+  revisar:
+    name: Sitio, busqueda y datos
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SITE: https://peru-spend-tracker.renzoaguilar.dev
+      MAX_DIAS: "3"
+      TITULO: "Monitor: el sitio público tiene un problema"
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Revisar
+        id: revision
+        run: |
+          problemas=""
+          falla() { problemas="${problemas}- $1"$'\n'; }
+          codigo() { curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$1"; }
+
+          [ "$(codigo "$SITE/")" = 200 ] || falla "La portada no responde 200."
+          [ "$(codigo "$SITE/obras")" = 200 ] || falla "La ruta /obras no responde 200."
+          [ "$(codigo "$SITE/data/sql/catalogo.json")" = 200 ] || falla "La consola SQL no encuentra sus tablas."
+
+          estado=$(curl -s --max-time 20 "$SITE/api/estado" || true)
+          echo "$estado" | grep -q '"obras":[1-9]' || falla "La búsqueda semántica no está lista: ${estado:-sin respuesta}."
+
+          actualizado=$(curl -s --max-time 20 "$SITE/data/meta.json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["actualizado"])' || true)
+          if [ -z "$actualizado" ]; then
+            falla "No se pudo leer data/meta.json."
+          else
+            dias=$(python3 -c "from datetime import datetime, timezone; print((datetime.now(timezone.utc) - datetime.fromisoformat('$actualizado')).days)")
+            [ "$dias" -le "$MAX_DIAS" ] || falla "Los datos tienen $dias días (última publicación: $actualizado). Revisa los DAGs de Airflow."
+          fi
+
+          {
+            echo "problemas<<EOF"
+            printf '%s' "$problemas"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          if [ -n "$problemas" ]; then
+            printf '### Problemas\n%s' "$problemas" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Todo en orden." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Abrir o actualizar el aviso
+        if: steps.revision.outputs.problemas != ''
+        env:
+          PROBLEMAS: ${{ steps.revision.outputs.problemas }}
+        run: |
+          numero=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number --jq '.[0].number')
+          cuerpo=$(printf '%s\n\nRevisión: %s/%s/actions/runs/%s' "$PROBLEMAS" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID")
+          if [ -n "$numero" ]; then
+            gh issue comment "$numero" --repo "$GITHUB_REPOSITORY" --body "$cuerpo"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITULO" --body "$cuerpo"
+          fi
+
+      - name: Cerrar el aviso si ya no hay problemas
+        if: steps.revision.outputs.problemas == ''
+        run: |
+          numero=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number --jq '.[0].number')
+          if [ -n "$numero" ]; then
+            gh issue close "$numero" --repo "$GITHUB_REPOSITORY" --comment "Todo volvió a responder bien."
+          fi
