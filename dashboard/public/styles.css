@@ -212,8 +212,9 @@ section { padding: 30px 0; border-top: 1px solid var(--line); }
 
 /* Diagrama animado del flujo (Como funciona): complementa las tarjetas de abajo. */
 .flujo { margin: 20px 0 4px; }
-.flujo svg { display: block; width: 100%; height: auto; overflow: visible; }
-.flujo svg.vertical { max-width: 420px; margin-inline: auto; }
+.flujo-lienzo > svg { display: block; width: 100%; height: auto; overflow: visible; }
+.flujo-lienzo > svg.vertical { max-width: 420px; margin-inline: auto; }
+.icono-doc { fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .flujo figcaption { margin-top: 8px; color: var(--muted); font-size: 13px; }
 .flujo text { fill: var(--ink); font: 700 15px var(--sans); }
 .flujo text .num { fill: var(--muted); font: 500 13px var(--mono); }
