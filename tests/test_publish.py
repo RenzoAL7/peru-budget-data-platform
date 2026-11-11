@@ -62,3 +62,26 @@ def test_sitemap_incluye_paginas_y_fichas(tmp_path):
     xml = path.read_text()
     assert xml.count("<url>") == 5
     assert "/entidad/M1-ancon</loc><lastmod>2026-11-10</lastmod>" in xml
+
+
+def test_portada_por_nivel_de_gobierno():
+    from gasto_pipeline.publish import home_by_level, works_summary
+
+    con = duckdb.connect()
+    con.execute("""CREATE TABLE mart_fuente AS SELECT * FROM (VALUES
+        (2025, 'M', '00', 100::DECIMAL(38, 2), 80::DECIMAL(38, 2)),
+        (2025, 'M', '18', 50, 40),
+        (2025, 'E', '00', 300, 290),
+        (2016, 'E', '00', 9, 9)) t(year, nivel, fuente, pim, devengado)""")
+    con.execute("""CREATE TABLE mart_mensual AS SELECT * FROM (VALUES
+        (2025, 'M', 2, 0.5), (2025, 'M', 1, 0.2), (2025, 'E', 1, 0.3))
+        t(year, nivel, mes, avance_acumulado)""")
+    con.execute("""CREATE TABLE mart_proyecto AS SELECT * FROM (VALUES
+        (2025, 0.1), (2025, 0.9), (2025, 0.49), (2024, 0.0)) t(year, avance)""")
+
+    data = home_by_level(con, [2025])
+
+    assert data["niveles"] == {2025: {"E": {"pim": 300, "dev": 290}, "M": {"pim": 150, "dev": 120}}}
+    assert data["mensual_nivel"] == {2025: {"E": [0.3], "M": [0.2, 0.5]}}
+    assert works_summary(con, 2025) == {"ano": 2025, "n": 3, "bajo_mitad": 2}
+    assert home_by_level(con, []) == {"niveles": {}, "mensual_nivel": {}}

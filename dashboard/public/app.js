@@ -37,7 +37,8 @@ const title = (s) => String(s ?? "").toLowerCase()
   .replace(/\bHuanuco\b/g, "Huánuco")
   .replace(/\bJunin\b/g, "Junín")
   .replace(/\bApurimac\b/g, "Apurímac")
-  .replace(/\bSan Martin\b/g, "San Martín");
+  .replace(/\bSan Martin\b/g, "San Martín")
+  .replace(/\bAncash\b/g, "Áncash");
 const fn = (name) => funcion(name, title);
 
 /* ---------- Rutas ---------- */
@@ -146,28 +147,66 @@ function obraCard(o, withEntity) {
   </article>`;
 }
 
-/* ---------- Grafico del ritmo mensual ---------- */
-function paceChart(monthly, year) {
-  const current = monthly[year] ?? [];
-  const previous = closedYears().filter((y) => y < year && monthly[y]?.length === 12).slice(0, 5);
-  const average = previous.length
-    ? Array.from({ length: 12 }, (_, i) => previous.reduce((s, y) => s + monthly[y][i], 0) / previous.length)
-    : [];
-  const W = 640; const H = 230; const P = { l: 44, r: 14, t: 12, b: 28 };
+/* ---------- Graficos de la portada ---------- */
+const NIVELES = ["E", "R", "M"];
+
+/** Ritmo del gasto acumulado por nivel de gobierno, con diciembre resaltado. */
+function levelPaceChart(series, year) {
+  const W = 560; const H = 250; const P = { l: 50, r: 56, t: 12, b: 32 };
   const x = (i) => P.l + (i / 11) * (W - P.l - P.r);
-  const y = (v) => H - P.b - Math.max(0, Math.min(1, v)) * (H - P.t - P.b);
-  const line = (values) => values.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join("");
+  const y = (v) => H - P.b - Math.max(0, Math.min(1, v ?? 0)) * (H - P.t - P.b);
   const short = months(true);
-  const label = `${t("ritmo.titulo")} ${year}: ${current.map((v, i) => `${short[i]} ${pctText(v)}`).join(", ")}`;
+  const path = (values) => values.map((v, i) => `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(v).toFixed(1)}`).join("");
+  const levels = NIVELES.filter((n) => series[n]?.length);
+  const full = levels.every((n) => series[n].length === 12);
+  const muni = series.M ?? [];
+  const jump = full && muni.length === 12 ? muni[11] - muni[10] : null;
+  // Etiquetas al final de cada linea, separadas para que no se encimen.
+  const ends = levels.map((n) => ({ n, v: series[n].at(-1), i: series[n].length - 1 })).sort((a, b) => a.v - b.v);
+  let last = Infinity;
+  const labelY = new Map();
+  for (const e of ends) { const yy = Math.min(y(e.v) + 5, last - 16); labelY.set(e.n, yy); last = yy; }
+  const label = `${t("hallazgo.ritmo.aria", { ano: year })} ${levels.map((n) => `${t(`nivel.corto.${n}`)} ${pctText(series[n].at(-1))}`).join(", ")}`;
+  return `<figure class="pace lvl-pace">
+    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">
+      ${full ? `<rect class="dec-band" x="${x(10.5)}" y="${P.t}" width="${x(11) - x(10.5) + 14}" height="${H - P.t - P.b}"/>` : ""}
+      ${[0, 0.5, 1].map((v) => `<line class="grid-line" x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${P.l - 8}" y="${y(v) + 4}" text-anchor="end">${v * 100}%</text>`).join("")}
+      ${[0, 5, 11].map((i) => `<text x="${x(i)}" y="${H - 8}" text-anchor="middle"${i === 11 && full ? ' class="dec"' : ""}>${esc(short[i])}</text>`).join("")}
+      ${levels.map((n) => `<path class="lvl-line l-${n}" d="${path(series[n])}"/>`).join("")}
+      ${levels.map((n) => `<text class="end l-${n}" x="${x(series[n].length - 1) + 8}" y="${labelY.get(n)}">${esc(fmt.whole(series[n].at(-1) * 100))}%</text>`).join("")}
+      ${jump != null ? `<line class="jump" x1="${x(11) - 14}" x2="${x(11) - 14}" y1="${y(muni[10])}" y2="${y(muni[11])}"/><text class="jump-t" x="${x(11) - 20}" y="${y(muni[10]) + 22}" text-anchor="end">+${esc(fmt.whole(jump * 100))} ${esc(t("pts"))}</text>` : ""}
+    </svg>
+    <figcaption class="legend">${levels.map((n) => `<span><i class="i-lvl l-${n}"></i>${esc(t(`nivel.corto.${n}`))}</span>`).join("")}</figcaption>
+  </figure>`;
+}
+
+/** Porcentaje del presupuesto ejecutado en cada año cerrado; los años sin datos quedan como hueco. */
+function historyChart(points, highlight) {
+  const W = 540; const H = 230; const P = { l: 46, r: 10, t: 28, b: 32 };
+  const first = points[0].ano; const lastYear = points.at(-1).ano;
+  const span = lastYear - first + 1;
+  const step = (W - P.l - P.r) / span;
+  const low = Math.max(0, Math.floor(Math.min(...points.map((p) => p.a)) * 20) / 20 - 0.05);
+  const high = Math.min(1, Math.ceil(Math.max(...points.map((p) => p.a)) * 20) / 20);
+  const y = (v) => H - P.b - ((v - low) / (high - low)) * (H - P.t - P.b);
+  const byYear = new Map(points.map((p) => [p.ano, p]));
+  const gaps = [];
+  for (let ano = first; ano <= lastYear; ano += 1) if (!byYear.has(ano)) gaps.push(ano);
+  const label = `${t("hallazgo.historia.aria")} ${points.map((p) => `${p.ano} ${pctText(p.a)}`).join(", ")}`;
+  const bar = (p) => {
+    const bx = P.l + (p.ano - first) * step + step * 0.15;
+    return `<rect class="h-bar${p.ano === highlight ? " on" : ""}" x="${bx.toFixed(1)}" y="${y(p.a).toFixed(1)}" width="${(step * 0.7).toFixed(1)}" height="${(H - P.b - y(p.a)).toFixed(1)}" tabindex="0" data-tip="${esc(`${p.ano}: ${pctText(p.a)}`)}"/>`;
+  };
+  const hp = byYear.get(highlight);
+  const cx = (ano) => P.l + (ano - first + 0.5) * step;
   return `<figure class="pace">
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(label)}">
-      ${[0, 0.25, 0.5, 0.75, 1].map((v) => `<line class="grid-line" x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${P.l - 8}" y="${y(v) + 4}" text-anchor="end">${v * 100}%</text>`).join("")}
-      ${short.map((m, i) => `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${esc(m)}</text>`).join("")}
-      ${average.length ? `<path class="avg" d="${line(average)}"/>` : ""}
-      <path class="cur" d="${line(current)}"/>
-      ${current.map((v, i) => `<circle class="cur-dot" cx="${x(i)}" cy="${y(v)}" r="3.5" tabindex="0" data-tip="${esc(`${monthName(i + 1)} ${year}: ${pctText(v)}`)}"/>`).join("")}
+      ${[low, (low + high) / 2, high].map((v) => `<line class="grid-line" x1="${P.l}" x2="${W - P.r}" y1="${y(v)}" y2="${y(v)}"/><text x="${P.l - 6}" y="${y(v) + 4}" text-anchor="end">${esc(fmt.whole(v * 100))}%</text>`).join("")}
+      ${points.map(bar).join("")}
+      ${gaps.length ? `<text x="${(cx(gaps[0]) + cx(gaps.at(-1))) / 2}" y="${H - P.b - 8}" text-anchor="middle" class="gap-t">${esc(t("hallazgo.historia.hueco"))}</text>` : ""}
+      ${hp ? `<text x="${cx(hp.ano)}" y="${y(hp.a) - 7}" text-anchor="middle" class="h-val">${esc(pctText(hp.a))}</text>` : ""}
+      ${[first, lastYear, ...(highlight && highlight - first > 2 && lastYear - highlight > 2 ? [highlight] : [])].map((ano) => `<text x="${cx(ano)}" y="${H - 8}" text-anchor="middle"${ano === highlight ? ' class="dec"' : ""}>${ano}</text>`).join("")}
     </svg>
-    <figcaption class="legend"><span><i class="i-cur"></i>${esc(t("ritmo.ano", { ano: year }))}</span>${average.length ? `<span><i class="i-avg"></i>${esc(t("ritmo.promedio"))} (${previous.at(-1)}–${previous[0]})</span>` : ""}</figcaption>
   </figure>`;
 }
 
@@ -211,6 +250,169 @@ async function drawMap(box, regions, metric) {
 }
 
 /* ---------- Resumen ---------- */
+const DEUDA = "DEUDA PUBLICA";
+const FUNCIONES_INICIO = 5;
+const TABLAS_INICIO = 3;
+const pctWhole = (r) => `${fmt.whole((r ?? 0) * 100)}%`;
+
+/** Caso destacado: la obra con más dinero sin gastar del último año cerrado. */
+function featuredWork(o, summary) {
+  if (!o) return "";
+  const a = ratio(o.dev, o.pim);
+  const share = summary?.n && a != null && a < 0.5
+    ? `<span>${esc(t("caso.parte", { n: fmt.whole(summary.bajo_mitad) }))}</span>`
+    : "<span></span>";
+  return `<section class="caso" aria-labelledby="caso-titulo">
+    <p class="kicker">${esc(t("caso.kicker", { ano: meta.ano_cerrado }))}</p>
+    <div class="caso-card">
+      <div class="caso-txt">
+        <h2 id="caso-titulo">${esc(title(o.nombre))}</h2>
+        <p><a href="${entityHref(o.id, o.entidad)}">${esc(title(o.entidad))}</a> · ${esc(title(o.dep ?? ""))}${mefLink(o.codigo)}</p>
+      </div>
+      <div class="caso-num">
+        <p><b>${esc(soles(o.dev))}</b> <span>${esc(t("caso.gastados"))}</span></p>
+        <span class="track"><span class="fill accent" data-w="${clampPct(a)}"></span></span>
+        <p class="caso-de">${esc(t("caso.de", { pim: soles(o.pim) }))}</p>
+      </div>
+    </div>
+    <p class="caso-pie">${share}<a href="obras">${esc(t("caso.mas"))} →</a></p>
+  </section>`;
+}
+
+/** Quién deja la plata sin gastar: presupuesto y saldo por nivel de gobierno. */
+function levelCard(levels, partial) {
+  const rows = NIVELES.filter((n) => levels?.[n]).map((n) => ({ n, pim: levels[n].pim, rest: Math.max(levels[n].pim - levels[n].dev, 0) }));
+  const pim = rows.reduce((s, r) => s + r.pim, 0);
+  const rest = rows.reduce((s, r) => s + r.rest, 0);
+  if (!pim || !rest) return "";
+  const muni = rows.find((r) => r.n === "M");
+  const sharePim = muni ? muni.pim / pim : 0;
+  const shareRest = muni ? muni.rest / rest : 0;
+  const heading = muni && shareRest > sharePim
+    ? t(partial ? "hallazgo.nivel.parcial" : "hallazgo.nivel", { pres: pctWhole(sharePim), sin: pctWhole(shareRest) })
+    : t("hallazgo.nivel.neutro");
+  const stack = (key, total, value) => `<div class="stack-row">
+      <p>${esc(t(key, { monto: soles(total) }))}</p>
+      <div class="stack" aria-hidden="true">${rows.map((r) => `<span class="l-${r.n}" data-w="${(value(r) / total) * 100}">${value(r) / total >= 0.25 ? esc(pctWhole(value(r) / total)) : ""}</span>`).join("")}</div>
+    </div>`;
+  const aria = rows.map((r) => `${t(`nivel.corto.${r.n}`)}: ${pctWhole(r.pim / pim)} / ${pctWhole(r.rest / rest)}`).join("; ");
+  return `<article class="finding">
+    <p class="num">01</p>
+    <h3>${esc(heading)}</h3>
+    <div role="img" aria-label="${esc(aria)}">
+      ${stack("hallazgo.nivel.pres", pim, (r) => r.pim)}
+      ${stack(partial ? "hallazgo.nivel.falta" : "hallazgo.nivel.sin", rest, (r) => r.rest)}
+    </div>
+    <p class="legend">${rows.map((r) => `<span><i class="i-sq l-${r.n}"></i>${esc(t(`nivel.corto.${r.n}`))}</span>`).join("")}</p>
+    <button type="button" class="link-btn" data-buscar>${esc(t("hallazgo.nivel.buscar"))} →</button>
+  </article>`;
+}
+
+function paceCard(series, total, year, partial, mes) {
+  if (!series || !NIVELES.some((n) => series[n]?.length)) return "";
+  let heading = t("hallazgo.ritmo.parcial", { ano: year, mes });
+  if (!partial && total?.length === 12 && total[10] > 0) {
+    const times = (total[11] - total[10]) / (total[10] / 11);
+    heading = times >= 1.3 ? t("hallazgo.ritmo", { x: fmt.one(times) }) : t("hallazgo.ritmo.neutro", { ano: year });
+  }
+  return `<article class="finding">
+    <p class="num">02</p>
+    <h3>${esc(heading)}</h3>
+    ${levelPaceChart(series, year)}
+    <p class="finding-foot">${sqlButton("mensual")}</p>
+  </article>`;
+}
+
+function historyCard(nacional, year) {
+  const points = closedYears().map((ano) => {
+    const rows = nacional[ano] ?? [];
+    const pim = rows.reduce((s, r) => s + r.pim, 0);
+    return { ano, a: ratio(rows.reduce((s, r) => s + r.dev, 0), pim) };
+  }).filter((p) => p.a != null).sort((a, b) => a.ano - b.ano);
+  if (points.length < 3) return "";
+  const first = points[0]; const last = points.at(-1);
+  const best = points.reduce((m, p) => (p.a > m.a ? p : m));
+  const chosen = points.find((p) => p.ano === year);
+  const heading = chosen && chosen === best && chosen !== last
+    ? t("hallazgo.historia.mejor", { ano: year, pct: pctText(chosen.a), desde: first.ano })
+    : last === best
+      ? t("hallazgo.historia.nunca", { p0: pctWhole(first.a), y0: first.ano, pn: pctWhole(last.a), yn: last.ano })
+      : t("hallazgo.historia", { y0: first.ano, yn: last.ano });
+  const gaps = last.ano - first.ano + 1 > points.length;
+  return `<article class="finding">
+    <p class="num">03</p>
+    <h3>${esc(heading)}</h3>
+    ${historyChart(points, chosen ? year : last.ano)}
+    ${gaps ? `<p class="fine-note">${esc(t("hallazgo.historia.nota"))}</p>` : ""}
+  </article>`;
+}
+
+function regionsColumn(regions, year, partial, mes) {
+  const rows = (regions ?? []).filter((r) => r.pim > 0).map((r) => ({ ...r, a: r.dev / r.pim, rest: r.pim - r.dev }))
+    .sort((a, b) => a.a - b.a).slice(0, 5);
+  if (!rows.length) return "";
+  const worst = rows[0];
+  const heading = !partial && worst.a < 0.98
+    ? t("regiones.peor", { dep: title(worst.dep), n: fmt.whole(Math.round(1 / (1 - worst.a))) })
+    : t("regiones.peor.parcial", { ano: year, mes });
+  const max = Math.max(...rows.map((r) => 1 - r.a));
+  return `<div class="col-half">
+    ${sectionHead(esc(heading), "region", "peores")}
+    <p class="sub">${esc(t("regiones.peor.sub", { ano: year }))}</p>
+    <ul class="fn-list">${rows.map((r, i) => `<li class="fn${i === 0 ? " hot" : ""}">
+      <div class="fn-top"><span>${esc(title(r.dep))}</span><span>${esc(t("regiones.peor.fila", { monto: soles(r.rest), pct: pctText(r.a) }))}</span></div>
+      <span class="track"><span class="fill accent" data-w="${((1 - r.a) / max) * 100}"></span></span></li>`).join("")}</ul>
+    <button type="button" class="link-btn more" data-ir="mapa-titulo">${esc(t("regiones.ver.mapa"))} ↓</button>
+  </div>`;
+}
+
+function functionsColumn(rows, spent) {
+  if (!rows.length) return "";
+  const debt = rows.find((r) => r.f === DEUDA);
+  const debtShare = debt ? ratio(debt.dev, spent) : null;
+  const heading = debtShare >= 0.05 ? t("funciones.deuda", { n: fmt.whole(Math.round(1 / debtShare)) }) : t("funciones.titulo");
+  const item = (r) => `<li class="fn${r === debt ? " gold" : ""}">
+      <div class="fn-top"><span>${esc(fn(r.f))}</span><span>${esc(soles(r.dev))} · ${pctText(ratio(r.dev, spent))}</span></div>
+      <span class="track"><span class="fill" data-w="${clampPct(ratio(r.dev, rows[0].dev))}"></span></span></li>`;
+  const rest = rows.slice(FUNCIONES_INICIO);
+  return `<div class="col-half">
+    ${sectionHead(esc(heading), "funciones", "funciones")}
+    <p class="sub">${esc(t("funciones.sub", { total: soles(spent) }))}</p>
+    <ul class="fn-list">${rows.slice(0, FUNCIONES_INICIO).map(item).join("")}</ul>
+    ${rest.length ? `<details class="more-fn"><summary>${esc(t("funciones.todas", { n: rows.length }))}</summary><ul class="fn-list">${rest.map(item).join("")}</ul></details>` : ""}
+  </div>`;
+}
+
+async function openData() {
+  const catalog = await load("sql/catalogo.json").catch(() => null);
+  if (!catalog?.length) return "";
+  const biggest = [...catalog].sort((a, b) => b.bytes - a.bytes).slice(0, TABLAS_INICIO);
+  const size = (bytes) => (bytes >= 1e6 ? `${fmt.one(bytes / 1e6)} MB` : `${fmt.whole(bytes / 1e3)} KB`);
+  const rows = catalog.reduce((s, c) => s + c.filas, 0);
+  const example = new URL("data/sql/mart_proyecto.parquet", document.baseURI).href;
+  return `<section class="open-data" aria-labelledby="datos-abiertos">
+    <div class="od-text">
+      <p class="kicker">${esc(t("datos.kicker"))}</p>
+      <h2 id="datos-abiertos">${esc(t("datos.titulo"))}</h2>
+      <p>${esc(t("datos.texto", { n: catalog.length, filas: fmt.whole(rows), registros: fmt.one(meta.filas / 1e6) }))}</p>
+      <div class="od-actions">
+        <button type="button" class="od-main" data-abrir-consola>${esc(t("datos.consola"))}</button>
+        <a class="od-alt" href="como-funciona">${esc(t("datos.como"))}</a>
+      </div>
+    </div>
+    <div class="od-files">
+      <ul class="od-list">${biggest.map((c) => `<li><a href="data/sql/${esc(c.tabla)}.parquet" download>${esc(c.tabla)}.parquet</a><span>${esc(t("datos.filas", { n: fmt.whole(c.filas) }))} · ${esc(size(c.bytes))}</span></li>`).join("")}
+        ${catalog.length > TABLAS_INICIO ? `<li class="od-rest">${esc(t("datos.mas", { n: catalog.length - TABLAS_INICIO }))}</li>` : ""}</ul>
+      <pre class="od-code" tabindex="0"><span class="c">-- ${esc(t("datos.snippet"))}</span>
+<span class="k">SELECT</span> nombre, pim, devengado
+<span class="k">FROM</span> <span class="s">'${esc(example)}'</span>
+<span class="k">WHERE</span> year = ${meta.ano_cerrado}
+<span class="k">ORDER BY</span> sin_ejecutar <span class="k">DESC</span>
+<span class="k">LIMIT</span> 10;</pre>
+    </div>
+  </section>`;
+}
+
 async function home(params) {
   const [nacional, regiones, inicio] = await Promise.all([
     load("nacional.json"), load("regiones.json"),
@@ -225,34 +427,32 @@ async function home(params) {
   selectedYear = coverage.some((c) => c.ano === wanted && usable(c)) ? wanted
     : coverage.some((c) => c.ano === selectedYear && usable(c)) ? selectedYear : meta.ano_cerrado;
   let metric = params.get("mapa") === "habitante" ? "pc" : "avance";
-  const chip = (c) => usable(c)
-    ? `<button type="button" class="chip" data-ano="${c.ano}" aria-pressed="false"${running(c) ? ` aria-label="${esc(t("anos.encurso", { ano: c.ano, mes: monthName(c.ultimo_mes) }))}"` : ""}>${c.ano}${running(c) ? `<small>${esc(t("hasta.mes", { mes: months(true)[c.ultimo_mes - 1] }))}</small>` : ""}</button>`
-    : `<button type="button" class="chip" disabled title="${esc(t("anos.incompleto"))}" aria-label="${esc(`${c.ano}, ${t("anos.incompleto")}`)}">${c.ano}<small>${esc(t("incompleto"))}</small></button>`;
+  const option = (c) => {
+    const note = !usable(c) ? ` (${t("incompleto")})` : running(c) ? ` (${t("hasta.mes", { mes: months(true)[c.ultimo_mes - 1] })})` : "";
+    return `<option value="${c.ano}"${usable(c) ? "" : " disabled"}>${c.ano}${esc(note)}</option>`;
+  };
   const updated = new Date(meta.actualizado).toLocaleDateString(fmt.locale, { day: "numeric", month: "short", year: "numeric" });
+  const datos = await openData();
 
   main.innerHTML = `
-    <section class="hero" aria-labelledby="total">
-      <div class="hero-meta"><p>${esc(t("inicio.datos", { fecha: updated, filas: fmt.one(meta.filas / 1e6), desde: meta.cobertura[0]?.ano, hasta: meta.cobertura.at(-1)?.ano }))}</p></div>
-      <div class="years">
-        <button type="button" class="years-arrow" data-dir="-1" aria-label="${esc(t("anos.recientes"))}">‹</button>
-        <div class="years-pick" role="group" aria-label="${esc(t("anos.elegir"))}" tabindex="-1">${coverage.map(chip).join("")}</div>
-        <button type="button" class="years-arrow" data-dir="1" aria-label="${esc(t("anos.anteriores"))}">›</button>
+    <section class="hero" aria-labelledby="titular">
+      <div class="hero-meta">
+        <label class="year-pick"><span class="sr">${esc(t("anos.elegir"))}</span>
+          <select id="ano">${coverage.map(option).join("")}</select></label>
+        <p>${esc(t("inicio.datos", { fecha: updated, filas: fmt.one(meta.filas / 1e6), desde: meta.cobertura[0]?.ano, hasta: meta.cobertura.at(-1)?.ano }))}</p>
       </div>
-      <h1 class="total" id="total"></h1>
+      <h1 class="headline" id="titular"></h1>
       <p class="lead" id="total-frase"></p>
-      <div class="kpis" id="kpis"></div>
+      <div class="split" id="barra"></div>
     </section>
-    <section aria-labelledby="funciones">
-      ${sectionHead(esc(t("funciones.titulo")), "funciones", "funciones")}
-      <ul class="fn-list" id="fn-list"></ul>
+    ${featuredWork(inicio.obras?.[0], inicio.obras_resumen)}
+    <section class="findings" aria-labelledby="hallazgos">
+      <h2 class="kicker" id="hallazgos">${esc(t("hallazgo.kicker"))}</h2>
+      <div class="finding-grid" id="hallazgos-lista"></div>
     </section>
-    <section aria-labelledby="ritmo">
-      ${sectionHead(esc(t("ritmo.titulo")), "mensual", "ritmo")}
-      <p class="sub">${esc(t("ritmo.sub"))}</p>
-      <div id="ritmo-grafico"></div>
-    </section>
-    <section aria-labelledby="regiones">
-      <div class="sec-head"><h2 id="regiones">${esc(t("regiones.titulo"))}</h2>
+    <section class="halves" id="columnas"></section>
+    <section aria-labelledby="mapa-titulo">
+      <div class="sec-head"><h2 id="mapa-titulo">${esc(t("regiones.titulo"))}</h2>
         <div class="sec-tools">
           <div class="seg" role="group" aria-label="${esc(t("regiones.metrica"))}">
             <button type="button" data-metrica="avance">${esc(t("regiones.avance"))}</button>
@@ -267,12 +467,7 @@ async function home(params) {
         <ul class="dots" id="dots"></ul>
       </div>
     </section>
-    <section aria-labelledby="obras-top">
-      ${sectionHead(esc(t("obras.inicio.titulo", { ano: meta.ano_cerrado })), "obras", "obras-top")}
-      <p class="sub">${esc(t("obras.aviso"))}</p>
-      <div>${inicio.obras.map((o) => obraCard(o, true)).join("")}</div>
-      <a class="more" href="obras">${esc(t("ver.mas.obras"))}</a>
-    </section>`;
+    ${datos}`;
 
   const drawRegions = () => {
     const year = selectedYear;
@@ -313,45 +508,48 @@ async function home(params) {
   const draw = () => {
     const year = selectedYear;
     const info = meta.cobertura.find((c) => c.ano === year);
-    const partial = info && info.ultimo_mes < 12;
+    const partial = Boolean(info && info.ultimo_mes < 12);
     const mes = partial ? monthName(info.ultimo_mes) : "";
-    main.querySelectorAll("[data-ano]").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.ano === year)));
-    main.querySelector(`[data-ano="${year}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    document.getElementById("ano").value = String(year);
     const rows = nacional[year] ?? [];
     const spent = rows.reduce((s, r) => s + r.dev, 0);
     const budget = rows.reduce((s, r) => s + r.pim, 0);
-    const [, number, unit] = soles(spent).match(/^(S\/ [\d.,]+)\s*(.*)$/) ?? [null, soles(spent), ""];
-    document.getElementById("total").innerHTML = `${esc(number)} <small>${esc(unit)}</small>`;
-    document.getElementById("total-frase").textContent = partial
-      ? t("inicio.frase.parcial", { ano: year, mes, pct: pctText(ratio(spent, budget)) })
-      : t("inicio.frase", { ano: year, pct: pctText(ratio(spent, budget)) });
-    document.getElementById("kpis").innerHTML = `
-      <div class="kpi"><span>${term("pim", partial ? t("kpi.pim.parcial") : t("kpi.pim"))}</span><b>${esc(soles(budget))}</b></div>
-      <div class="kpi k-bar"><span>${term("devengado", partial ? t("kpi.gastado.parcial", { mes }) : t("kpi.gastado"))}</span><b>${esc(soles(spent))}</b></div>
-      <div class="kpi k-accent"><span>${esc(partial ? t("kpi.falta") : t("kpi.sin"))}</span><b>${esc(soles(budget - spent))}</b></div>`;
-    const top = rows.slice(0, 8);
-    document.getElementById("fn-list").innerHTML = top.map((r) => `<li class="fn">
-      <div class="fn-top"><span>${esc(fn(r.f))}</span><span>${esc(soles(r.dev))} · ${pctText(ratio(r.dev, spent))}</span></div>
-      <span class="track"><span class="fill" data-w="${clampPct(ratio(r.dev, top[0].dev))}"></span></span></li>`).join("");
-    document.getElementById("ritmo-grafico").innerHTML = inicio.mensual?.[year] ? paceChart(inicio.mensual, year) : "";
+    const rest = budget - spent;
+    const share = ratio(spent, budget);
+    // Poblacion INEI por departamento (desde 2018); "Exterior" no tiene, asi que se omite.
+    const people = (regiones[year] ?? []).reduce((s, r) => s + (r.pob ?? 0), 0);
+    const best = !partial && closedYears().every((y) => {
+      const other = nacional[y] ?? [];
+      return y === year || ratio(other.reduce((s, r) => s + r.dev, 0), other.reduce((s, r) => s + r.pim, 0)) <= share;
+    });
+
+    document.getElementById("titular").innerHTML = `<span class="hot">${esc(soles(rest))}</span> ${esc(t(partial ? "inicio.titular.parcial" : "inicio.titular", { ano: year, mes }))}`;
+    // Por habitante solo en años cerrados: a mitad de año el saldo todavía se está gastando.
+    const perPerson = people && !partial ? t("inicio.persona", { monto: soles(rest / people) }) : "";
+    const sentence = partial
+      ? t("inicio.lead.parcial", { pim: soles(budget), mes, pct: pctText(share) })
+      : t(best ? "inicio.lead.mejor" : "inicio.lead", { pim: soles(budget), pct: pctText(share), desde: closedYears().at(-1) });
+    document.getElementById("total-frase").innerHTML = `${perPerson ? `<strong>${esc(perPerson)}</strong> ` : ""}${esc(sentence)}`;
+    document.getElementById("barra").innerHTML = `
+      <div class="split-bar"><span class="split-dev" data-w="${clampPct(share)}"><b>${esc(t("kpi.gastado"))} · ${esc(pctText(share))}</b></span><span class="split-rest"></span></div>
+      <div class="split-legend">
+        <span>${term("pim", partial ? t("kpi.pim.parcial") : t("kpi.pim"))} <b>${esc(soles(budget))}</b></span>
+        <span>${term("devengado", partial ? t("kpi.gastado.parcial", { mes }) : t("kpi.gastado"))} <b>${esc(soles(spent))}</b></span>
+        <span class="split-hot">${esc(partial ? t("kpi.falta") : t("kpi.sin"))} <b>${esc(soles(rest))}</b></span>
+      </div>`;
+
+    document.getElementById("hallazgos-lista").innerHTML = [
+      levelCard(inicio.niveles?.[year], partial),
+      paceCard(inicio.mensual_nivel?.[year], inicio.mensual?.[year], year, partial, mes),
+      historyCard(nacional, year),
+    ].join("");
+    document.getElementById("columnas").innerHTML = regionsColumn(regiones[year], year, partial, mes) + functionsColumn(rows, spent);
     paint();
     drawRegions();
   };
 
-  const strip = main.querySelector(".years-pick");
-  const arrows = main.querySelectorAll(".years-arrow");
-  const syncArrows = () => {
-    arrows[0].disabled = strip.scrollLeft <= 1;
-    arrows[1].disabled = strip.scrollLeft + strip.clientWidth >= strip.scrollWidth - 1;
-  };
-  arrows.forEach((a) => a.addEventListener("click", () => {
-    strip.scrollBy({ left: +a.dataset.dir * strip.clientWidth * 0.8, behavior: "smooth" });
-  }));
-  strip.addEventListener("scroll", syncArrows, { passive: true });
-  strip.addEventListener("click", (ev) => {
-    const button = ev.target.closest("[data-ano]");
-    if (!button) return;
-    selectedYear = +button.dataset.ano;
+  document.getElementById("ano").addEventListener("change", (ev) => {
+    selectedYear = +ev.target.value;
     setParams({ year: selectedYear === meta.ano_cerrado ? null : selectedYear });
     draw();
     yearChanged();
@@ -365,7 +563,6 @@ async function home(params) {
   });
   document.getElementById("regiones-sql").addEventListener("click", () => showPreset(metric === "pc" ? "habitante" : "region"));
   draw();
-  syncArrows();
   setHead(t("titulo.inicio"), t("desc.inicio"), "");
 }
 
@@ -907,7 +1104,12 @@ main.addEventListener("click", (ev) => {
   const preset = ev.target.closest("[data-sql]");
   if (preset) { showPreset(preset.dataset.sql); return; }
   const ent = ev.target.closest("[data-entidad]");
-  if (ent) showSql(entitySql(ent.dataset.entidad), "mart_entidad_anual");
+  if (ent) { showSql(entitySql(ent.dataset.entidad), "mart_entidad_anual"); return; }
+  // Atajos de la portada: buscar, abrir la consola o bajar a una seccion.
+  if (ev.target.closest("[data-buscar]")) { document.getElementById("q").focus(); return; }
+  if (ev.target.closest("[data-abrir-consola]")) { document.getElementById("abrir-consola").click(); return; }
+  const jump = ev.target.closest("[data-ir]");
+  if (jump) document.getElementById(jump.dataset.ir)?.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
 /* ---------- Rutas ---------- */
