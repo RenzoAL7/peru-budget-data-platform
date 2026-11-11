@@ -17,11 +17,15 @@ DBT_DIR = Path(os.getenv("DBT_PROJECT_DIR", Path(__file__).resolve().parents[2] 
 SILVER_TABLES = ("fct_gasto", "cobertura")
 
 
-def _dbt(settings: Settings, select: str, year: int | None = None) -> None:
+def _dbt(
+    settings: Settings, select: str, year: int | None = None, full_refresh: bool = False
+) -> None:
     command = [
         "dbt", "build", "--project-dir", str(DBT_DIR), "--profiles-dir", str(DBT_DIR),
         "--select", select, "--no-use-colors",
     ]
+    if full_refresh:
+        command.append("--full-refresh")
     if year is not None:
         command += ["--vars", json.dumps({"year": year})]
     env = {**os.environ, "DATA_DIR": str(settings.data_dir)}
@@ -55,7 +59,9 @@ def build_silver(year: int, settings: Settings) -> None:
 def build_gold(settings: Settings) -> None:
     """Recalcula los marts a partir de todas las particiones silver."""
     log.info("Construyendo gold")
-    _dbt(settings, "tag:gold")
+    # Gold se recalcula entero en cada corrida; --full-refresh ademas recrea el seed de
+    # poblacion si cambian sus columnas (sin eso, dbt solo vacia la tabla existente).
+    _dbt(settings, "tag:gold", full_refresh=True)
     export_marts(settings)
     write_quality(settings)
 

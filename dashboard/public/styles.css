@@ -78,11 +78,11 @@ nav a[aria-current] { color: var(--ink); text-decoration: underline; text-decora
 .sql-toggle svg, .close svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .lang-toggle .corto { display: none; }
 .lang-toggle { flex: none; white-space: nowrap; min-height: 44px; padding: 0 12px; border: 1px solid var(--field-line); border-radius: 2px; background: var(--field); color: var(--ink); font-size: 14px; font-weight: 500; }
-.theme { display: flex; border: 1px solid var(--field-line); border-radius: 2px; overflow: hidden; }
-.theme button { display: inline-flex; align-items: center; gap: 6px; min-height: 42px; padding: 0 12px; border: 0; background: var(--field); color: var(--ink); font-size: 14px; font-weight: 500; }
-.theme button + button { border-left: 1px solid var(--field-line); }
-.theme button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
-.theme svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.theme-toggle { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border: 1px solid var(--field-line); border-radius: 2px; background: var(--field); color: var(--ink); }
+.theme-toggle svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.theme-toggle .icon-claro { display: none; }
+:root[data-theme="oscuro"] .theme-toggle .icon-claro { display: block; }
+:root[data-theme="oscuro"] .theme-toggle .icon-oscuro { display: none; }
 
 main:focus { outline: none; }
 .loading { padding: 60px 0; color: var(--muted); }
@@ -351,14 +351,13 @@ td.n, th.n { text-align: right; font-family: var(--mono); font-size: 14px; white
   .tools { order: 2; flex: 1 1 100%; flex-wrap: nowrap; justify-content: flex-start; }
   .search { flex: 1 1 auto; max-width: none; min-width: 0; }
   .sql-toggle { padding: 0 10px; }
-  .sql-toggle span, .theme span { display: none; }
+  .sql-toggle span { display: none; }
   .lang-toggle { padding: 0 10px; font-size: 13px; }
   .lang-toggle .largo { display: none; }
   .lang-toggle .corto { display: inline; }
   .console-pickers { grid-template-columns: 1fr; }
   .glossary { grid-template-columns: 1fr; gap: 2px 0; }
   .glossary dd { margin-bottom: 10px; }
-  .theme button { padding: 0 11px; }
   .hero { padding: 24px 0 24px; }
   .total { font-size: clamp(42px, 13vw, 64px); }
   .lead { font-size: 17px; }

@@ -6,7 +6,7 @@ models:
         data_tests: [unique, not_null]
   - name: mart_cobertura
     columns:
-      - name: ano
+      - name: year
         data_tests: [unique, not_null]
       - name: estado
         data_tests:
@@ -17,7 +17,7 @@ models:
     data_tests:
       - dbt_utils_free_unique:
           arguments:
-            columns: [entidad_id, ano]
+            columns: [entidad_id, year]
   - name: mart_entidad_territorio
     description: Ubigeo INEI del territorio que atiende cada municipalidad o gobierno regional.
     columns:
@@ -27,12 +27,12 @@ models:
     data_tests:
       - dbt_utils_free_unique:
           arguments:
-            columns: [entidad_id, ano]
+            columns: [entidad_id, year]
   - name: mart_mensual
     data_tests:
       - dbt_utils_free_unique:
           arguments:
-            columns: [ano, nivel, mes]
+            columns: [year, nivel, mes]
   - name: mart_proyecto
     columns:
       - name: nombre

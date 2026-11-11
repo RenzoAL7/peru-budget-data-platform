@@ -149,7 +149,7 @@ def publish(settings: Settings) -> Path:
     staging = settings.published_dir / "data.tmp"
     shutil.rmtree(staging, ignore_errors=True)
 
-    coverage = _rows(con, "SELECT * FROM mart_cobertura ORDER BY ano")
+    coverage = _rows(con, "SELECT * RENAME (year AS ano) FROM mart_cobertura ORDER BY year")
     closed_year, running_year = choose_years(coverage)
     reliable = [c["ano"] for c in coverage if c["estado"] == "completo"]
     show_years = [y for y in (closed_year, running_year) if y]
@@ -184,9 +184,9 @@ def publish(settings: Settings) -> Path:
 
     annual = defaultdict(list)
     for row in _rows(con, f"""
-        SELECT entidad_id, ano, pia, pim, devengado AS dev, girado AS gir,
+        SELECT entidad_id, year AS ano, pia, pim, devengado AS dev, girado AS gir,
                poblacion AS pob, devengado_por_habitante AS pc
-        FROM mart_entidad_anual WHERE ano IN ({reliable_list}) ORDER BY ano"""):
+        FROM mart_entidad_anual WHERE year IN ({reliable_list}) ORDER BY year"""):
         annual[row.pop("entidad_id")].append(row)
 
     peers = {
@@ -195,23 +195,23 @@ def publish(settings: Settings) -> Path:
             SELECT entidad_id, tipo, decil_pim AS decil, entidades_en_grupo AS n,
                    mediana_avance AS mediana, percentil_avance AS percentil,
                    pim_minimo_grupo AS pim_min, pim_maximo_grupo AS pim_max
-            FROM mart_entidad_pares WHERE ano = {closed_year}""")
+            FROM mart_entidad_pares WHERE year = {closed_year}""")
     }
 
     functions = defaultdict(lambda: defaultdict(list))
     for row in _rows(con, f"""
-        SELECT entidad_id, ano, funcion AS f, pim, devengado AS dev
-        FROM mart_entidad_funcion WHERE ano IN ({",".join(map(str, show_years))})
+        SELECT entidad_id, year AS ano, funcion AS f, pim, devengado AS dev
+        FROM mart_entidad_funcion WHERE year IN ({",".join(map(str, show_years))})
         ORDER BY devengado DESC"""):
         functions[row.pop("entidad_id")][row.pop("ano")].append(row)
 
     projects = defaultdict(list)
     for row in _rows(con, f"""
         SELECT * EXCLUDE (rk) FROM (
-            SELECT entidad_id, ano, codigo, {NOMBRE_OBRA.format(p="")} AS nombre,
+            SELECT entidad_id, year AS ano, codigo, {NOMBRE_OBRA.format(p="")} AS nombre,
                    departamento AS dep, pim, devengado AS dev,
                    avance, row_number() OVER (PARTITION BY entidad_id ORDER BY sin_ejecutar DESC) rk
-            FROM mart_proyecto WHERE ano = {closed_year}
+            FROM mart_proyecto WHERE year = {closed_year}
         ) WHERE rk <= {PROYECTOS_POR_ENTIDAD}"""):
         projects[row.pop("entidad_id")].append(row)
 
@@ -229,16 +229,16 @@ def publish(settings: Settings) -> Path:
 
     regions = defaultdict(list)
     for row in _rows(con, f"""
-        SELECT ano, ubigeo, departamento AS dep, pim, devengado AS dev,
+        SELECT year AS ano, ubigeo, departamento AS dep, pim, devengado AS dev,
                poblacion AS pob, devengado_por_habitante AS pc
-        FROM mart_region_anual WHERE ano IN ({reliable_list}) ORDER BY pim DESC"""):
+        FROM mart_region_anual WHERE year IN ({reliable_list}) ORDER BY pim DESC"""):
         regions[row.pop("ano")].append(row)
     _write(staging / "regiones.json", regions)
 
     national = defaultdict(list)
     for row in _rows(con, f"""
-        SELECT ano, funcion AS f, pim, devengado AS dev
-        FROM mart_nacional_funcion WHERE ano IN ({reliable_list}) ORDER BY devengado DESC"""):
+        SELECT year AS ano, funcion AS f, pim, devengado AS dev
+        FROM mart_nacional_funcion WHERE year IN ({reliable_list}) ORDER BY devengado DESC"""):
         national[row.pop("ano")].append(row)
     _write(staging / "nacional.json", national)
 
@@ -247,7 +247,7 @@ def publish(settings: Settings) -> Path:
             SELECT e.entidad_id AS id, e.nombre AS n, e.departamento AS d, a.pim,
                    a.devengado AS dev, a.avance
             FROM mart_entidad_anual a JOIN mart_entidad e USING (entidad_id)
-            WHERE a.ano = {closed_year} AND e.nivel = '{nivel}' AND a.pim >= {MIN_PIM_RANKING}
+            WHERE a.year = {closed_year} AND e.nivel = '{nivel}' AND a.pim >= {MIN_PIM_RANKING}
             ORDER BY a.avance ASC LIMIT {RANKING_SIZE}""")
         for nivel in ("M", "R", "E")
     })
@@ -256,16 +256,16 @@ def publish(settings: Settings) -> Path:
         SELECT p.codigo, {NOMBRE_OBRA.format(p="p.")} AS nombre, p.departamento AS dep,
                p.pim, p.devengado AS dev, p.avance, e.entidad_id AS id, e.nombre AS entidad
         FROM mart_proyecto p JOIN mart_entidad e USING (entidad_id)
-        WHERE p.ano = {closed_year}
+        WHERE p.year = {closed_year}
         ORDER BY p.sin_ejecutar DESC LIMIT {TOP_PROYECTOS}""")
     _write(staging / "obras.json", works)
 
     # Lo minimo para la portada: evita descargar las 400 obras para mostrar 5.
     monthly = defaultdict(list)
     for row in _rows(con, f"""
-        SELECT ano, mes, sum(devengado_acumulado) / nullif(sum(pim_anual), 0) AS acum
-        FROM mart_mensual WHERE ano IN ({reliable_list})
-        GROUP BY ano, mes ORDER BY ano, mes"""):
+        SELECT year AS ano, mes, sum(devengado_acumulado) / nullif(sum(pim_anual), 0) AS acum
+        FROM mart_mensual WHERE year IN ({reliable_list})
+        GROUP BY year, mes ORDER BY year, mes"""):
         monthly[row.pop("ano")].append(row["acum"])
     _write(staging / "inicio.json", {"obras": works[:OBRAS_INICIO], "mensual": monthly})
     write_sitemap(

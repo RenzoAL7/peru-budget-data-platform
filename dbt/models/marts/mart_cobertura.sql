@@ -8,4 +8,4 @@ select
         else 'incompleto'
     end as estado
 from {{ silver('cobertura') }}
-order by ano
+order by year

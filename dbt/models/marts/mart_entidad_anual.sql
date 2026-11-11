@@ -2,7 +2,7 @@
 with anual as (
     select
         entidad_id,
-        ano,
+        year,
         sum(pia) as pia,
         sum(pim) as pim,
         sum(devengado) as devengado,
@@ -19,9 +19,9 @@ con_poblacion as (
     from anual
     left join {{ ref('mart_entidad_territorio') }} as territorio using (entidad_id)
     left join {{ ref('poblacion_inei') }} as poblacion
-        on poblacion.ubigeo = territorio.ubigeo and poblacion.ano = anual.ano
+        on poblacion.ubigeo = territorio.ubigeo and poblacion.year = anual.year
     left join {{ ref('poblacion_inei') }} as excluida
-        on excluida.ubigeo = territorio.ubigeo_excluido and excluida.ano = anual.ano
+        on excluida.ubigeo = territorio.ubigeo_excluido and excluida.year = anual.year
 )
 
 select

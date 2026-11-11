@@ -3,7 +3,7 @@
 with base as (
     select
         anual.entidad_id,
-        anual.ano,
+        anual.year,
         anual.pim,
         anual.avance,
         coalesce(territorio.territorio, case entidad.nivel when 'E' then 'nacional' else 'otro' end)
@@ -15,19 +15,19 @@ with base as (
 ),
 
 con_decil as (
-    select *, ntile(10) over (partition by ano, tipo order by pim) as decil_pim
+    select *, ntile(10) over (partition by year, tipo order by pim) as decil_pim
     from base
 )
 
 select
     entidad_id,
-    ano,
+    year,
     tipo,
     decil_pim,
     count(*) over grupo as entidades_en_grupo,
     median(avance) over grupo as mediana_avance,
-    percent_rank() over (partition by ano, tipo, decil_pim order by avance) as percentil_avance,
+    percent_rank() over (partition by year, tipo, decil_pim order by avance) as percentil_avance,
     min(pim) over grupo as pim_minimo_grupo,
     max(pim) over grupo as pim_maximo_grupo
 from con_decil
-window grupo as (partition by ano, tipo, decil_pim)
+window grupo as (partition by year, tipo, decil_pim)

@@ -57,9 +57,9 @@ def build_index(settings: Settings) -> Path:
     con = duckdb.connect(str(settings.data_dir / "warehouse.duckdb"), read_only=True)
     rows = con.execute(
         """
-        SELECT arg_max(p.nombre, p.ano), arg_max(p.departamento, p.ano), p.entidad_id,
-               any_value(e.nombre), max(p.ano), arg_max(p.pim, p.ano)::DOUBLE,
-               arg_max(p.devengado, p.ano)::DOUBLE, p.codigo
+        SELECT arg_max(p.nombre, p.year), arg_max(p.departamento, p.year), p.entidad_id,
+               any_value(e.nombre), max(p.year), arg_max(p.pim, p.year)::DOUBLE,
+               arg_max(p.devengado, p.year)::DOUBLE, p.codigo
         FROM mart_proyecto p JOIN mart_entidad e USING (entidad_id)
         WHERE p.nombre IS NOT NULL
         GROUP BY p.entidad_id, p.codigo

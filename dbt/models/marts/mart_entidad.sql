@@ -4,7 +4,7 @@
 with por_lugar as (
     select
         entidad_id,
-        ano,
+        year,
         entidad_nombre,
         nivel,
         nivel_nombre,
@@ -20,14 +20,14 @@ with por_lugar as (
 
 select
     entidad_id,
-    arg_max(entidad_nombre, struct_pack(ano, pim, entidad_nombre)) as nombre,
-    arg_max(nivel, struct_pack(ano, pim, entidad_nombre)) as nivel,
-    arg_max(nivel_nombre, struct_pack(ano, pim, entidad_nombre)) as nivel_nombre,
-    arg_max(sector_nombre, struct_pack(ano, pim, entidad_nombre)) as sector,
-    arg_max(entidad_departamento, struct_pack(ano, pim, entidad_nombre)) as departamento,
-    arg_max(entidad_provincia, struct_pack(ano, pim, entidad_nombre)) as provincia,
-    arg_max(entidad_distrito, struct_pack(ano, pim, entidad_nombre)) as distrito,
-    min(ano) as primer_ano,
-    max(ano) as ultimo_ano
+    arg_max(entidad_nombre, struct_pack(year, pim, entidad_nombre)) as nombre,
+    arg_max(nivel, struct_pack(year, pim, entidad_nombre)) as nivel,
+    arg_max(nivel_nombre, struct_pack(year, pim, entidad_nombre)) as nivel_nombre,
+    arg_max(sector_nombre, struct_pack(year, pim, entidad_nombre)) as sector,
+    arg_max(entidad_departamento, struct_pack(year, pim, entidad_nombre)) as departamento,
+    arg_max(entidad_provincia, struct_pack(year, pim, entidad_nombre)) as provincia,
+    arg_max(entidad_distrito, struct_pack(year, pim, entidad_nombre)) as distrito,
+    min(year) as first_year,
+    max(year) as last_year
 from por_lugar
 group by entidad_id

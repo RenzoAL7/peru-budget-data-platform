@@ -1,7 +1,7 @@
 -- Proyectos de inversion: lo presupuestado frente a lo realmente ejecutado.
 select
     entidad_id,
-    ano,
+    year,
     producto_proyecto as codigo,
     any_value(producto_proyecto_nombre) as nombre,
     any_value(departamento_meta_nombre) as departamento,
@@ -12,5 +12,5 @@ select
 from {{ silver('fct_gasto') }}
 where tipo_act_proy = '2'
   and producto_proyecto <> '2001621'  -- estudios de preinversion: codigo generico
-group by entidad_id, ano, codigo
+group by entidad_id, year, codigo
 having sum(pim) >= {{ var('min_proyecto_pim') }}

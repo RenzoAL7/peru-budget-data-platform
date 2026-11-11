@@ -36,5 +36,5 @@ seeds:
         departamento: varchar
         provincia: varchar
         distrito: varchar
-        ano: integer
+        year: integer
         poblacion: bigint
