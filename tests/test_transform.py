@@ -49,3 +49,22 @@ def test_detecta_anios_cerrados_sin_silver(settings):
     silver.parent.mkdir(parents=True)
     silver.write_text("silver")
     assert transform.missing_history(settings) == []
+
+
+def test_resumen_de_pruebas_dbt():
+    from gasto_pipeline.transform import summarize_tests
+
+    summary = summarize_tests({
+        "metadata": {"generated_at": "2026-11-10T00:00:00Z"},
+        "results": [
+            {"unique_id": "model.gasto_peru.mart_entidad", "status": "success"},
+            {"unique_id": "test.gasto_peru.unique_mart_entidad_entidad_id.abc", "status": "pass"},
+            {"unique_id": "test.gasto_peru.not_null_mart_proyecto_nombre.def", "status": "warn",
+             "failures": 34},
+        ],
+    })
+    assert summary["total"] == 2
+    assert (summary["pass"], summary["warn"], summary["fail"]) == (1, 1, 0)
+    assert summary["pruebas"][0] == {
+        "prueba": "not_null_mart_proyecto_nombre", "estado": "warn", "fallas": 34,
+    }

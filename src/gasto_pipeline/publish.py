@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import re
 import shutil
+import unicodedata
 from collections import defaultdict
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -19,6 +22,17 @@ MIN_PIM_RANKING = 1_000_000
 RANKING_SIZE = 20
 TOP_PROYECTOS = 400
 PROYECTOS_POR_ENTIDAD = 30
+OBRAS_INICIO = 5
+SITE_URL = os.getenv("SITE_URL", "https://peru-spend-tracker.renzoaguilar.dev").rstrip("/")
+# El MEF publica algunas obras sin nombre: se muestran con su codigo.
+NOMBRE_OBRA = (
+    "coalesce(nullif(trim({p}nombre), ''), "
+    "'Obra sin nombre registrado (código ' || {p}codigo || ')')"
+)
+PREFIJO_ENTIDAD = re.compile(
+    r"^(MUNICIPALIDAD|GOBIERNO REGIONAL)( (DISTRITAL|PROVINCIAL|METROPOLITANA|DEL DEPARTAMENTO))?"
+    r"( DEL?)? "
+)
 # Marts que la consola SQL de la pagina puede consultar, en el orden del selector.
 SQL_TABLES = (
     "mart_nacional_funcion",
@@ -26,9 +40,14 @@ SQL_TABLES = (
     "mart_entidad",
     "mart_entidad_anual",
     "mart_entidad_funcion",
+    "mart_entidad_pares",
+    "mart_entidad_territorio",
     "mart_proyecto",
+    "mart_mensual",
+    "mart_fuente",
     "mart_cobertura",
 )
+PAGINAS = ("", "obras", "ranking", "como-funciona")
 
 
 def _number(value):
@@ -59,6 +78,41 @@ def choose_years(coverage: list[dict]) -> tuple[int, int | None]:
     latest = max(closed)
     running = [c["ano"] for c in complete if c["ano"] > latest]
     return latest, (max(running) if running else None)
+
+
+def slug(text: str | None) -> str:
+    """Texto para URLs: minusculas, sin tildes y con guiones."""
+    plain = unicodedata.normalize("NFD", (text or "").lower())
+    plain = "".join(c for c in plain if unicodedata.category(c) != "Mn")
+    return re.sub(r"[^a-z0-9]+", "-", plain).strip("-")[:80]
+
+
+def entity_path(entity_id: str, name: str | None) -> str:
+    """Ruta publica de la ficha. El id va primero: el resto solo ayuda a leer y a buscar."""
+    readable = slug(PREFIJO_ENTIDAD.sub("", name or ""))
+    return f"entidad/{entity_id}-{readable}" if readable else f"entidad/{entity_id}"
+
+
+def write_sitemap(path: Path, entity_ids: list[tuple[str, str]], updated: str) -> None:
+    urls = [f"{SITE_URL}/{page}" for page in PAGINAS]
+    urls += [f"{SITE_URL}/{entity_path(i, n)}" for i, n in entity_ids]
+    day = updated[:10]
+    body = "".join(
+        f"<url><loc>{url}</loc><lastmod>{day}</lastmod></url>" for url in urls
+    )
+    path.write_text(
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        f'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{body}</urlset>'
+    )
+
+
+def read_quality(settings: Settings) -> dict | None:
+    """Resumen de las pruebas dbt de la ultima construccion de gold, si existe."""
+    path = settings.gold_dir / "calidad.json"
+    try:
+        return json.loads(path.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
 
 
 def export_sql_tables(con, target: Path) -> list[dict]:
@@ -101,8 +155,12 @@ def publish(settings: Settings) -> Path:
     show_years = [y for y in (closed_year, running_year) if y]
     reliable_list = ",".join(map(str, reliable))
 
+    updated = datetime.now(UTC).isoformat(timespec="seconds")
+    unnamed = con.execute(
+        "SELECT count(*) FROM mart_proyecto WHERE nullif(trim(nombre), '') IS NULL"
+    ).fetchone()[0]
     _write(staging / "meta.json", {
-        "actualizado": datetime.now(UTC).isoformat(timespec="seconds"),
+        "actualizado": updated,
         "ano_cerrado": closed_year,
         "ano_en_curso": running_year,
         "filas": sum(c["filas_totales"] for c in coverage),
@@ -111,9 +169,13 @@ def publish(settings: Settings) -> Path:
              "ultimo_mes": c["ultimo_mes_con_gasto"]}
             for c in coverage
         ],
+        "obras_sin_nombre": unnamed,
+        "calidad": read_quality(settings),
     })
 
-    entities = _rows(con, "SELECT * FROM mart_entidad")
+    entities = _rows(con, """
+        SELECT e.*, t.territorio, t.ubigeo
+        FROM mart_entidad e LEFT JOIN mart_entidad_territorio t USING (entidad_id)""")
     _write(staging / "buscador.json", [
         {"id": e["entidad_id"], "n": e["nombre"], "v": e["nivel"], "d": e["departamento"],
          "p": e["provincia"], "s": e["sector"]}
@@ -122,9 +184,19 @@ def publish(settings: Settings) -> Path:
 
     annual = defaultdict(list)
     for row in _rows(con, f"""
-        SELECT entidad_id, ano, pia, pim, devengado AS dev, girado AS gir
+        SELECT entidad_id, ano, pia, pim, devengado AS dev, girado AS gir,
+               poblacion AS pob, devengado_por_habitante AS pc
         FROM mart_entidad_anual WHERE ano IN ({reliable_list}) ORDER BY ano"""):
         annual[row.pop("entidad_id")].append(row)
+
+    peers = {
+        row.pop("entidad_id"): row
+        for row in _rows(con, f"""
+            SELECT entidad_id, tipo, decil_pim AS decil, entidades_en_grupo AS n,
+                   mediana_avance AS mediana, percentil_avance AS percentil,
+                   pim_minimo_grupo AS pim_min, pim_maximo_grupo AS pim_max
+            FROM mart_entidad_pares WHERE ano = {closed_year}""")
+    }
 
     functions = defaultdict(lambda: defaultdict(list))
     for row in _rows(con, f"""
@@ -136,7 +208,8 @@ def publish(settings: Settings) -> Path:
     projects = defaultdict(list)
     for row in _rows(con, f"""
         SELECT * EXCLUDE (rk) FROM (
-            SELECT entidad_id, ano, codigo, nombre, departamento AS dep, pim, devengado AS dev,
+            SELECT entidad_id, ano, codigo, {NOMBRE_OBRA.format(p="")} AS nombre,
+                   departamento AS dep, pim, devengado AS dev,
                    avance, row_number() OVER (PARTITION BY entidad_id ORDER BY sin_ejecutar DESC) rk
             FROM mart_proyecto WHERE ano = {closed_year}
         ) WHERE rk <= {PROYECTOS_POR_ENTIDAD}"""):
@@ -151,11 +224,13 @@ def publish(settings: Settings) -> Path:
             "anual": annual[entity_id],
             "funciones": functions.get(entity_id, {}),
             "proyectos": projects.get(entity_id, []),
+            "pares": peers.get(entity_id),
         })
 
     regions = defaultdict(list)
     for row in _rows(con, f"""
-        SELECT ano, ubigeo, departamento AS dep, pim, devengado AS dev
+        SELECT ano, ubigeo, departamento AS dep, pim, devengado AS dev,
+               poblacion AS pob, devengado_por_habitante AS pc
         FROM mart_region_anual WHERE ano IN ({reliable_list}) ORDER BY pim DESC"""):
         regions[row.pop("ano")].append(row)
     _write(staging / "regiones.json", regions)
@@ -177,12 +252,27 @@ def publish(settings: Settings) -> Path:
         for nivel in ("M", "R", "E")
     })
 
-    _write(staging / "obras.json", _rows(con, f"""
-        SELECT p.codigo, p.nombre, p.departamento AS dep, p.pim, p.devengado AS dev, p.avance,
-               e.entidad_id AS id, e.nombre AS entidad
+    works = _rows(con, f"""
+        SELECT p.codigo, {NOMBRE_OBRA.format(p="p.")} AS nombre, p.departamento AS dep,
+               p.pim, p.devengado AS dev, p.avance, e.entidad_id AS id, e.nombre AS entidad
         FROM mart_proyecto p JOIN mart_entidad e USING (entidad_id)
         WHERE p.ano = {closed_year}
-        ORDER BY p.sin_ejecutar DESC LIMIT {TOP_PROYECTOS}"""))
+        ORDER BY p.sin_ejecutar DESC LIMIT {TOP_PROYECTOS}""")
+    _write(staging / "obras.json", works)
+
+    # Lo minimo para la portada: evita descargar las 400 obras para mostrar 5.
+    monthly = defaultdict(list)
+    for row in _rows(con, f"""
+        SELECT ano, mes, sum(devengado_acumulado) / nullif(sum(pim_anual), 0) AS acum
+        FROM mart_mensual WHERE ano IN ({reliable_list})
+        GROUP BY ano, mes ORDER BY ano, mes"""):
+        monthly[row.pop("ano")].append(row["acum"])
+    _write(staging / "inicio.json", {"obras": works[:OBRAS_INICIO], "mensual": monthly})
+    write_sitemap(
+        staging / "sitemap.xml",
+        [(e["entidad_id"], e["nombre"]) for e in entities if e["entidad_id"] in annual],
+        updated,
+    )
 
     export_sql_tables(con, staging / "sql")
     con.close()

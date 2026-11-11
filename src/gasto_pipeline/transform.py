@@ -57,6 +57,46 @@ def build_gold(settings: Settings) -> None:
     log.info("Construyendo gold")
     _dbt(settings, "tag:gold")
     export_marts(settings)
+    write_quality(settings)
+
+
+def dbt_target() -> Path:
+    return Path(os.getenv("DBT_TARGET_PATH", DBT_DIR / "target"))
+
+
+def summarize_tests(run_results: dict) -> dict:
+    """Resume las pruebas dbt para mostrarlas en la pagina."""
+    tests = []
+    for result in run_results.get("results", []):
+        unique_id = result.get("unique_id", "")
+        if not unique_id.startswith("test."):
+            continue
+        tests.append({
+            "prueba": unique_id.split(".")[2],
+            "estado": result.get("status"),
+            "fallas": result.get("failures") or 0,
+        })
+    tests.sort(key=lambda t: (t["estado"] == "pass", t["prueba"]))
+    counts = {state: sum(t["estado"] == state for t in tests) for state in ("pass", "warn", "fail")}
+    return {
+        "generado": run_results.get("metadata", {}).get("generated_at"),
+        "total": len(tests),
+        **counts,
+        "pruebas": tests,
+    }
+
+
+def write_quality(settings: Settings) -> None:
+    """Guarda el resultado de las pruebas de gold junto a los marts (se respalda en el bucket)."""
+    source = dbt_target() / "run_results.json"
+    if not source.exists():
+        log.warning("Sin run_results.json: no se actualiza el resumen de calidad")
+        return
+    summary = summarize_tests(json.loads(source.read_text()))
+    settings.gold_dir.mkdir(parents=True, exist_ok=True)
+    (settings.gold_dir / "calidad.json").write_text(json.dumps(summary, ensure_ascii=False))
+    log.info("Calidad: %s pruebas, %s avisos, %s fallas", summary["total"], summary["warn"],
+             summary["fail"])
 
 
 def export_marts(settings: Settings) -> None:

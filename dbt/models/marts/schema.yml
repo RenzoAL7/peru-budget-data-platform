@@ -18,3 +18,26 @@ models:
       - dbt_utils_free_unique:
           arguments:
             columns: [entidad_id, ano]
+  - name: mart_entidad_territorio
+    description: Ubigeo INEI del territorio que atiende cada municipalidad o gobierno regional.
+    columns:
+      - name: entidad_id
+        data_tests: [unique, not_null]
+  - name: mart_entidad_pares
+    data_tests:
+      - dbt_utils_free_unique:
+          arguments:
+            columns: [entidad_id, ano]
+  - name: mart_mensual
+    data_tests:
+      - dbt_utils_free_unique:
+          arguments:
+            columns: [ano, nivel, mes]
+  - name: mart_proyecto
+    columns:
+      - name: nombre
+        description: El MEF publica algunas obras sin nombre; la pagina las muestra con su codigo.
+        data_tests:
+          - not_null:
+              config:
+                severity: warn

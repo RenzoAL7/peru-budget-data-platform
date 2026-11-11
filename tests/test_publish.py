@@ -42,3 +42,23 @@ def test_exporta_los_marts_a_parquet_para_la_consola(tmp_path):
     assert proyecto["bytes"] == parquet.stat().st_size
     assert con.execute(f"SELECT sum(pim) FROM '{parquet}'").fetchone()[0] == 4.5
     assert json.loads((tmp_path / "sql" / "catalogo.json").read_text()) == catalog
+
+
+def test_ruta_de_entidad_con_id_primero_y_nombre_legible():
+    from gasto_pipeline.publish import entity_path, slug
+
+    assert slug("Peñalolén  de Ñuñoa!") == "penalolen-de-nunoa"
+    miraflores = entity_path("M301271", "MUNICIPALIDAD DISTRITAL DE MIRAFLORES")
+    assert miraflores == "entidad/M301271-miraflores"
+    assert entity_path("R463", "GOBIERNO REGIONAL DEL DEPARTAMENTO DE LIMA") == "entidad/R463-lima"
+    assert entity_path("E10", None) == "entidad/E10"
+
+
+def test_sitemap_incluye_paginas_y_fichas(tmp_path):
+    from gasto_pipeline.publish import write_sitemap
+
+    path = tmp_path / "sitemap.xml"
+    write_sitemap(path, [("M1", "MUNICIPALIDAD DISTRITAL DE ANCON")], "2026-11-10T10:00:00+00:00")
+    xml = path.read_text()
+    assert xml.count("<url>") == 5
+    assert "/entidad/M1-ancon</loc><lastmod>2026-11-10</lastmod>" in xml
