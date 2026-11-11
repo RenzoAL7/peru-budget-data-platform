@@ -209,6 +209,28 @@ section { padding: 30px 0; border-top: 1px solid var(--line); }
 .flow b { display: block; font-size: 15px; }
 .flow b::before { content: counter(paso) ". "; color: var(--muted); font: 500 13px var(--mono); }
 .flow span { display: block; margin-top: 4px; color: var(--muted); font-size: 14px; }
+
+/* Diagrama animado del flujo (Como funciona): complementa las tarjetas de abajo. */
+.flujo { margin: 20px 0 4px; }
+.flujo svg { display: block; width: 100%; height: auto; overflow: visible; }
+.flujo svg.vertical { max-width: 420px; margin-inline: auto; }
+.flujo figcaption { margin-top: 8px; color: var(--muted); font-size: 13px; }
+.flujo text { fill: var(--ink); font: 700 15px var(--sans); }
+.flujo text .num { fill: var(--muted); font: 500 13px var(--mono); }
+.flujo text.sub { fill: var(--muted); font: 400 12px var(--mono); }
+.flujo-node .caja { fill: var(--bg); stroke: var(--line); }
+.flujo-node .tope { fill: var(--bar); }
+.flujo-node.ultimo .tope { fill: var(--accent); }
+.flujo-node.orquesta .caja { fill: var(--soft); }
+.flujo-cluster { fill: none; stroke: var(--field-line); stroke-dasharray: 6 5; }
+.flujo .flujo-etiqueta { fill: var(--muted); font: 500 12px var(--mono); }
+.flujo-riel { fill: none; stroke: var(--track); stroke-width: 4; stroke-linecap: round; }
+.flujo-ctrl { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 4 5; animation: flujo-orden 1.2s linear infinite; }
+.pkt.crudo { fill: var(--muted); }
+.pkt.parquet { fill: var(--bar); }
+.flujo-pulso { fill: none; stroke: var(--bar); stroke-width: 2; transform-box: fill-box; transform-origin: center; animation: flujo-pulso 2.4s ease-out infinite; }
+@keyframes flujo-orden { to { stroke-dashoffset: -18; } }
+@keyframes flujo-pulso { from { transform: scale(1); opacity: .7; } to { transform: scale(1.18, 1.5); opacity: 0; } }
 .glossary { display: grid; grid-template-columns: minmax(140px, max-content) 1fr; gap: 8px 20px; margin: 14px 0 0; }
 .glossary dt { font-weight: 600; }
 .glossary dd { margin: 0; color: var(--strong); }
@@ -374,4 +396,6 @@ td.n, th.n { text-align: right; font-family: var(--mono); font-size: 14px; white
 }
 @media (prefers-reduced-motion: reduce) {
   body { transition: none; }
+  .flujo .pkt, .flujo-pulso { display: none; }
+  .flujo-ctrl { animation: none; }
 }
