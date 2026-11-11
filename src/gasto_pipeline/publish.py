@@ -115,6 +115,36 @@ def read_quality(settings: Settings) -> dict | None:
         return None
 
 
+def home_by_level(con, years: list[int]) -> dict:
+    """Presupuesto, gasto y ritmo mensual por nivel de gobierno, para los hallazgos de la portada.
+
+    Se agregan claves nuevas a inicio.json; las que ya existian no cambian.
+    """
+    year_list = ",".join(map(str, years)) or "NULL"
+    levels = defaultdict(dict)
+    for row in _rows(con, f"""
+        SELECT year AS ano, nivel, sum(pim) AS pim, sum(devengado) AS dev
+        FROM mart_fuente WHERE year IN ({year_list})
+        GROUP BY year, nivel ORDER BY year, nivel"""):
+        levels[row["ano"]][row["nivel"]] = {"pim": row["pim"], "dev": row["dev"]}
+    pace = defaultdict(lambda: defaultdict(list))
+    for row in _rows(con, f"""
+        SELECT year AS ano, nivel, mes, avance_acumulado AS acum
+        FROM mart_mensual WHERE year IN ({year_list})
+        ORDER BY year, nivel, mes"""):
+        pace[row["ano"]][row["nivel"]].append(row["acum"])
+    return {"niveles": levels, "mensual_nivel": pace}
+
+
+def works_summary(con, year: int) -> dict:
+    """Cuantas obras tuvo el anio y cuantas gastaron menos de la mitad de su presupuesto."""
+    total, below_half = con.execute(
+        "SELECT count(*), count(*) FILTER (WHERE avance < 0.5) FROM mart_proyecto WHERE year = ?",
+        [year],
+    ).fetchone()
+    return {"ano": year, "n": total, "bajo_mitad": below_half}
+
+
 def export_sql_tables(con, target: Path) -> list[dict]:
     """Copia los marts a Parquet para la consola SQL del navegador (DuckDB-WASM).
 
@@ -267,7 +297,12 @@ def publish(settings: Settings) -> Path:
         FROM mart_mensual WHERE year IN ({reliable_list})
         GROUP BY year, mes ORDER BY year, mes"""):
         monthly[row.pop("ano")].append(row["acum"])
-    _write(staging / "inicio.json", {"obras": works[:OBRAS_INICIO], "mensual": monthly})
+    _write(staging / "inicio.json", {
+        "obras": works[:OBRAS_INICIO],
+        "mensual": monthly,
+        **home_by_level(con, reliable),
+        "obras_resumen": works_summary(con, closed_year),
+    })
     write_sitemap(
         staging / "sitemap.xml",
         [(e["entidad_id"], e["nombre"]) for e in entities if e["entidad_id"] in annual],
