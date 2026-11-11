@@ -18,6 +18,7 @@
     "@fontsource/ibm-plex-mono": "5.3.0",
     "@lezer/highlight": "1.2.5",
     "esbuild": "0.28.2",
+    "simple-icons": "16.36.0",
     "sql-formatter": "15.9.0"
   }
 }

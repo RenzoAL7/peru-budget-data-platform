@@ -219,7 +219,9 @@ async function home(params) {
   const coverage = [...meta.cobertura].sort((a, b) => b.ano - a.ano);
   const usable = (c) => Boolean(nacional[c.ano]);
   const running = (c) => c.ultimo_mes < 12;
-  const wanted = Number(params.get("ano"));
+  // ?year= en la URL; ?ano= se sigue aceptando para no romper enlaces compartidos antes del cambio.
+  const wanted = Number(params.get("year") ?? params.get("ano"));
+  if (params.has("ano")) setParams({ ano: null, year: params.get("year") ?? params.get("ano") });
   selectedYear = coverage.some((c) => c.ano === wanted && usable(c)) ? wanted
     : coverage.some((c) => c.ano === selectedYear && usable(c)) ? selectedYear : meta.ano_cerrado;
   let metric = params.get("mapa") === "habitante" ? "pc" : "avance";
@@ -350,7 +352,7 @@ async function home(params) {
     const button = ev.target.closest("[data-ano]");
     if (!button) return;
     selectedYear = +button.dataset.ano;
-    setParams({ ano: selectedYear === meta.ano_cerrado ? null : selectedYear });
+    setParams({ year: selectedYear === meta.ano_cerrado ? null : selectedYear });
     draw();
     yearChanged();
   });
@@ -625,6 +627,100 @@ ORDER BY e.nivel, a.avance;`;
 }
 
 /* ---------- Como funciona ---------- */
+/* ---------- Diagrama animado del flujo de datos ---------- */
+// SVG sin estilos en linea (la CSP solo permite styles.css): colores y animaciones CSS van por clase;
+// el movimiento de los puntos usa <animateMotion>, que no es estilo. Horizontal en pantallas anchas y
+// vertical en angostas. Con "reducir movimiento" los puntos y animaciones se ocultan desde el CSS.
+// Los logos de cada tecnologia salen de vendor/logos/flujo.json (ver dashboard/src/logos/README.md).
+let flowLogos = null;
+const loadFlowLogos = () => (flowLogos ??= fetch("vendor/logos/flujo.json?v=dev")
+  .then((r) => (r.ok ? r.json() : {})).catch(() => ({})));
+// Documento con la esquina doblada: el MEF no tiene un logo de uso libre.
+const DOC_ICON = { viewBox: "0 0 24 24", body: '<path class="icono-doc" d="M6 2.5h8.5L19 7v14.5H6zM14.5 2.5V7H19M9 12h7M9 15.5h7M9 19h4"/>' };
+
+function flowSvg(vertical, logos) {
+  const L = vertical
+    ? { w: 360, h: 720, nw: 170, nh: 88, main: [0, 1, 2, 3, 4].map((i) => [100, 54 + i * 153]), air: [285, 360], aw: 130,
+      cluster: [4, 149, 352, 434], label: [196, 574],
+      ctrl: ["M220 360H202V207H185", "M220 360H185", "M220 360H202V513H185"] }
+    : { w: 1000, h: 290, nw: 150, nh: 88, main: [0, 1, 2, 3, 4].map((i) => [75 + i * 212.5, 222]), air: [500, 64], aw: 150,
+      cluster: [196, 8, 608, 272], label: [210, 32],
+      ctrl: ["M500 108V143H287.5V178", "M500 108V178", "M500 108V143H712.5V178"] };
+  const logo = (icon, x, y, size) => (icon
+    ? `<svg class="flujo-logo" x="${x}" y="${y}" width="${size}" height="${size}" viewBox="${icon.viewBox}" aria-hidden="true">${icon.body}</svg>`
+    : "");
+  const site = (x, y, size) => `<image href="favicon.svg" x="${x}" y="${y}" width="${size}" height="${size}" aria-hidden="true"/>`;
+  const nodes = [
+    { n: 1, title: t("flujo.mef"), sub: t("flujo.mef.d"), icons: [DOC_ICON] },
+    { n: 3, title: "Bronze", sub: t("flujo.bronze.d"), icons: [logos.parquet] },
+    { n: 4, title: "Silver", sub: t("flujo.silver.d"), icons: [logos.dbt, logos.duckdb] },
+    { n: 5, title: "Gold", sub: t("flujo.gold.d"), icons: [logos.duckdb] },
+    { n: 6, title: t("flujo.web"), sub: t("flujo.web.d"), icons: ["site"], last: true },
+  ];
+  const box = ([cx, cy], w, h, node, cls = "") => {
+    const x = cx - w / 2;
+    const y = cy - h / 2;
+    const size = 24;
+    const icons = node.icons.filter(Boolean);
+    const row = icons.length * size + (icons.length - 1) * 8;
+    const art = icons.map((icon, i) => {
+      const ix = cx - row / 2 + i * (size + 8);
+      return icon === "site" ? site(ix, y + 12, size) : logo(icon, ix, y + 12, size);
+    }).join("");
+    return `<g class="flujo-node${node.last ? " ultimo" : ""}${cls}">
+      <rect class="caja" x="${x}" y="${y}" width="${w}" height="${h}" rx="3"/>
+      <rect class="tope" x="${x}" y="${y}" width="${w}" height="3"/>
+      ${art}
+      <text x="${cx}" y="${y + 58}" text-anchor="middle"><tspan class="num">${node.n}.</tspan> ${esc(node.title)}</text>
+      <text class="sub" x="${cx}" y="${y + 76}" text-anchor="middle">${esc(node.sub)}</text>
+    </g>`;
+  };
+  const [first, bronze] = L.main;
+  const last = L.main.at(-1);
+  const rail = vertical ? `M${first[0]} ${first[1]}V${last[1]}` : `M${first[0]} ${first[1]}H${last[0]}`;
+  const raw = vertical ? `M${first[0]} ${first[1]}V${bronze[1]}` : `M${first[0]} ${first[1]}H${bronze[0]}`;
+  const parquet = vertical ? `M${bronze[0]} ${bronze[1]}V${last[1]}` : `M${bronze[0]} ${bronze[1]}H${last[0]}`;
+  const length = (a, b) => Math.abs(vertical ? b[1] - a[1] : b[0] - a[0]);
+  // Misma velocidad en ambos tramos: la duracion sale del largo. Tres puntos por tramo, escalonados.
+  const dots = (id, from, to, cls, r) => {
+    const dur = length(from, to) / 110;
+    return [0, 1, 2].map((k) => `<circle class="pkt ${cls}" r="${r}">
+      <animateMotion dur="${dur.toFixed(2)}s" begin="${(-k * dur / 3).toFixed(2)}s" repeatCount="indefinite"><mpath href="#${id}"/></animateMotion></circle>`).join("");
+  };
+  const [lx, ly] = L.label;
+  return `<svg viewBox="0 0 ${L.w} ${L.h}" role="img" aria-labelledby="flujo-titulo" class="${vertical ? "vertical" : "horizontal"}">
+    <title id="flujo-titulo">${esc(t("flujo.alt"))}</title>
+    <defs><path id="flujo-crudo" d="${raw}"/><path id="flujo-parquet" d="${parquet}"/></defs>
+    <rect class="flujo-cluster" x="${L.cluster[0]}" y="${L.cluster[1]}" width="${L.cluster[2]}" height="${L.cluster[3]}" rx="8"/>
+    ${logo(logos.k3s, lx, ly - 12, 16)}
+    <text class="flujo-etiqueta" x="${logos.k3s ? lx + 22 : lx}" y="${ly}">${esc(t("flujo.cluster"))}</text>
+    ${L.ctrl.map((d) => `<path class="flujo-ctrl" d="${d}"/>`).join("")}
+    <path class="flujo-riel" d="${rail}"/>
+    ${dots("flujo-crudo", first, bronze, "crudo", 7)}${dots("flujo-parquet", bronze, last, "parquet", 3.5)}
+    <rect class="flujo-pulso" x="${L.air[0] - L.aw / 2}" y="${L.air[1] - L.nh / 2}" width="${L.aw}" height="${L.nh}" rx="3"/>
+    ${box(L.air, L.aw, L.nh, { n: 2, title: "Airflow", sub: t("flujo.airflow.d"), icons: [logos.airflow] }, " orquesta")}
+    ${nodes.map((node, i) => box(L.main[i], L.nw, L.nh, node)).join("")}
+  </svg>`;
+}
+
+function mountFlow(figure) {
+  let vertical = null;
+  let logos = null;
+  const render = () => {
+    if (!figure.isConnected) { observer.disconnect(); return; }
+    // Sin ancho todavia (antes del primer layout) o sin logos: se vuelve a llamar cuando esten.
+    if (!figure.clientWidth || !logos) return;
+    const next = figure.clientWidth < 560;
+    if (next === vertical) return;
+    vertical = next;
+    figure.querySelector(".flujo-lienzo").innerHTML = flowSvg(vertical, logos);
+  };
+  const observer = new ResizeObserver(render);
+  observer.observe(figure);
+  // Si los logos no cargan, el diagrama se dibuja igual, sin ellos.
+  loadFlowLogos().then((data) => { logos = data ?? {}; render(); });
+}
+
 async function como() {
   const quality = meta.calidad;
   const steps = ["mef", "airflow", "bronze", "silver", "gold", "web"];
@@ -634,6 +730,7 @@ async function como() {
     <p class="lead">${esc(t("como.lead", { filas: fmt.whole(meta.filas) }))}</p>
     <section><h2>${esc(t("como.arquitectura"))}</h2>
       <p class="sub">${esc(t("como.arquitectura.sub"))}</p>
+      <figure class="flujo"><div class="flujo-lienzo"></div><figcaption>${esc(t("flujo.nota"))}</figcaption></figure>
       <ol class="flow">${steps.map((s) => `<li><b>${esc(t(`como.paso.${s}`))}</b><span>${esc(t(`como.paso.${s}.d`))}</span></li>`).join("")}</ol>
     </section>
     <section>${sectionHead(esc(t("como.calidad")), "calidad")}
@@ -660,6 +757,7 @@ async function como() {
       <li><a href="https://ofi5.mef.gob.pe/ssi/" rel="noopener" target="_blank">MEF · Sistema de Seguimiento de Inversiones</a></li>
     </ul></section>
     <section><h2>${esc(t("como.codigo"))}</h2><p>${t("como.codigo.texto", { github: '<a href="https://github.com/RenzoAL7/peru-spend-tracker" rel="noopener" target="_blank">GitHub</a>' })}</p></section>`;
+  mountFlow(main.querySelector(".flujo"));
   setHead(`${t("titulo.como")} · Peru Spend Tracker`, t("como.lead", { filas: fmt.whole(meta.filas) }), "como-funciona");
 }
 

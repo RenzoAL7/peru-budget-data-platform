@@ -68,6 +68,32 @@ for (const weight of [400, 500, 600]) {
 }
 copyFileSync(join(modules, "@fontsource", "ibm-plex-mono", "LICENSE"), join(out, "fonts", "ibm-plex-mono.LICENSE"));
 
+// Logos del diagrama de "Como funciona" (ver src/logos/README.md): trazos SVG con el color de cada
+// marca, en un JSON que la pagina inserta dentro de su propio SVG (la CSP no permite estilos en linea).
+const icons = await import("simple-icons");
+const mark = (icon) => ({ title: icon.title, viewBox: "0 0 24 24", body: `<path fill="#${icon.hex}" d="${icon.path}"/>` });
+const dbt = readFileSync(join(here, "src", "logos", "dbt-bit.svg"), "utf8");
+const dbtPath = dbt.match(/<path d="([^"]+)"/)?.[1];
+const dbtViewBox = dbt.match(/viewBox="([^"]+)"/)?.[1];
+if (!dbtPath || !dbtViewBox) throw new Error("No se pudo leer src/logos/dbt-bit.svg");
+// Airflow: el molinete multicolor oficial (src/logos/airflow-pin.svg), legible en ambos temas.
+const airflow = readFileSync(join(here, "src", "logos", "airflow-pin.svg"), "utf8");
+const airflowBody = airflow.match(/<svg[^>]*>([\s\S]*)<\/svg>/)?.[1]?.trim();
+if (!airflowBody) throw new Error("No se pudo leer src/logos/airflow-pin.svg");
+const logos = {
+  airflow: { title: "Apache Airflow", viewBox: "0 0 175 175", body: airflowBody },
+  parquet: mark(icons.siApacheparquet),
+  // El trazo de DuckDB es el circulo con el pato calado: el fondo negro completa el logo oficial.
+  duckdb: { ...mark(icons.siDuckdb), body: `<circle cx="12" cy="12" r="11.6" fill="#000"/>${mark(icons.siDuckdb).body}` },
+  // Igual que DuckDB: el trazo es el recuadro amarillo con las marcas caladas sobre fondo oscuro.
+  k3s: { ...mark(icons.siK3s), body: `<rect x="0.6" y="2.8" width="22.8" height="18.4" rx="2" fill="#000"/>${mark(icons.siK3s).body}` },
+  // Solo el simbolo de dbt, sin la marca registrada que lo acompaña en el archivo original.
+  dbt: { title: "dbt", viewBox: dbtViewBox, body: `<path fill="#f16122" d="${dbtPath}"/>` },
+};
+mkdirSync(join(out, "logos"), { recursive: true });
+writeFileSync(join(out, "logos", "flujo.json"), JSON.stringify(logos));
+copyFileSync(join(here, "src", "logos", "README.md"), join(out, "logos", "LEEME.txt"));
+
 const extDir = join(out, "duckdb", "extensions", DUCKDB_CORE, "wasm_eh");
 mkdirSync(extDir, { recursive: true });
 const extFiles = [];
