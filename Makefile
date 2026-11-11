@@ -3,7 +3,7 @@ install:
 	uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python -e ".[dev]"
 check:
 	.venv/bin/ruff check src tests services airflow/dags
-	for f in dashboard/public/*.js dashboard/vendor.mjs; do node --check "$$f" || exit 1; done
+	for f in dashboard/public/*.js dashboard/src/*.js dashboard/vendor.mjs; do node --check "$$f" || exit 1; done
 test:
 	PYTHONPATH=src .venv/bin/pytest -q
 render:

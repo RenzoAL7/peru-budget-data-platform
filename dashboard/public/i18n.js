@@ -1,0 +1,458 @@
+// Textos de la pagina en espanol e ingles, y formatos de numeros y montos.
+const STORE_KEY = "pst-idioma";
+
+const ES = {
+  "skip": "Saltar al contenido",
+  "nav.resumen": "Resumen",
+  "nav.obras": "Obras",
+  "nav.ranking": "Ranking",
+  "nav.como": "Cómo funciona",
+  "nav.secciones": "Secciones",
+  "buscar.label": "Buscar entidad pública",
+  "buscar.placeholder": "Busca tu distrito, región o ministerio",
+  "buscar.vacio": "Sin resultados. Prueba con otro nombre.",
+  "consola": "Consola SQL",
+  "tema": "Tema de la página",
+  "tema.claro": "Claro",
+  "tema.oscuro": "Oscuro",
+  "idioma.cambiar": "English",
+  "idioma.corto": "EN",
+  "idioma.etiqueta": "Ver la página en inglés",
+  "pie.fuente": "Fuentes: {mef}, población del {inei} y mapa de {geo}. Proyecto independiente, no es un sitio oficial del Estado.",
+  "pie.actualizado": "Datos actualizados el {fecha}.",
+  "cargando": "Cargando datos…",
+  "error.noencontrado": "No encontramos esa información.",
+  "volver": "Volver al resumen",
+  "compartir": "Compartir",
+  "enlace.copiado": "Enlace copiado",
+  "ver.sql": "Ver SQL",
+  "ver.tabla": "Ver como tabla",
+  "ver.mas.obras": "Ver más obras",
+  "ver.mef": "Ver en el MEF",
+  "ver.mef.titulo": "Ficha oficial de la inversión en el Sistema de Seguimiento de Inversiones del MEF",
+  "nivel.M": "Municipalidad",
+  "nivel.R": "Gobierno regional",
+  "nivel.E": "Gobierno nacional",
+  "mil.millones": "mil millones",
+  "millones": "millones",
+  "sin.datos": "s/d",
+  "hasta.mes": "hasta {mes}",
+  "incompleto": "incompleto",
+  "anos.elegir": "Elegir año",
+  "anos.recientes": "Años más recientes",
+  "anos.anteriores": "Años anteriores",
+  "anos.encurso": "{ano}, en curso hasta {mes}",
+  "anos.incompleto": "Archivo oficial incompleto: no se suma",
+  "inicio.datos": "Datos al día: {fecha} · {filas} M de registros oficiales · {desde}–{hasta}",
+  "inicio.frase": "gastó el Estado peruano en {ano}: el {pct} de su presupuesto.",
+  "inicio.frase.parcial": "gastó el Estado peruano en {ano} hasta {mes}: el {pct} de su presupuesto del año, que aún está en curso.",
+  "kpi.pim": "Presupuesto final",
+  "kpi.pim.parcial": "Presupuesto del año",
+  "kpi.gastado": "Gastado",
+  "kpi.gastado.parcial": "Gastado hasta {mes}",
+  "kpi.sin": "Quedó sin gastar",
+  "kpi.falta": "Falta gastar",
+  "kpi.habitante": "Gasto por habitante",
+  "kpi.poblacion": "{n} habitantes (INEI)",
+  "funciones.titulo": "¿En qué se gastó?",
+  "ritmo.titulo": "Ritmo del gasto durante el año",
+  "ritmo.sub": "Porcentaje del presupuesto anual gastado al cierre de cada mes. La línea punteada es el promedio de los años cerrados anteriores: buena parte del gasto se concentra en diciembre.",
+  "ritmo.ano": "{ano}",
+  "ritmo.promedio": "Promedio de años anteriores",
+  "regiones.titulo": "Gasto por región",
+  "regiones.sub.avance": "Parte del presupuesto que se gastó dentro de cada departamento, sumando los tres niveles de gobierno. Escala de {min}% a 100%.",
+  "regiones.sub.pc": "Soles gastados dentro de cada departamento por cada habitante (población proyectada por el INEI).",
+  "regiones.sub.pc.sin": "El INEI publica población por departamento desde 2018. Elige un año desde 2018 para ver el gasto por habitante.",
+  "regiones.metrica": "Medida del mapa",
+  "regiones.avance": "% ejecutado",
+  "regiones.pc": "Por habitante",
+  "regiones.mapa": "Mapa del Perú por departamento. Haz clic en un departamento para ver sus obras.",
+  "regiones.tip": "{dep}: gastó {dev} de {pim} ({pct})",
+  "regiones.tip.pc": "{dep}: {pc} por habitante · {pob} habitantes",
+  "obras.inicio.titulo": "Obras con más dinero sin gastar en {ano}",
+  "obras.aviso": "Gastar poco no prueba corrupción. Una obra puede estar empezando, tener problemas técnicos o haber recibido fondos a fin de año.",
+  "obras.aviso.largo": "Gastar poco no prueba corrupción. Una obra puede estar empezando, tener problemas técnicos o haber recibido fondos a fin de año. Es una señal para hacer preguntas.",
+  "obras.titulo": "Obras que se quedaron con la plata sin gastar",
+  "obras.lead": "Proyectos con más dinero sin ejecutar en {ano}, de más a menos.",
+  "obras.buscar": "Busca como hablas: posta médica, cancha de fútbol, pistas…",
+  "obras.buscar.label": "Buscar obras",
+  "obras.dep": "Departamento",
+  "obras.prov": "Provincia",
+  "obras.dist": "Distrito",
+  "obras.todo": "Todo el Perú",
+  "obras.todas": "Todas",
+  "obras.todos": "Todos",
+  "obras.consultando": "Consultando las obras…",
+  "obras.n50": "Las 50 obras con más dinero sin gastar.",
+  "obras.n": "{n} obras con más dinero sin gastar.",
+  "obras.ninguna": "No hay obras registradas en {ano} para este filtro.",
+  "obras.error": "No se pudo consultar las obras. Prueba de nuevo.",
+  "obras.buscando": "Buscando…",
+  "obras.parecidas": "{n} obras parecidas a “{q}”.",
+  "obras.busqueda.error": "La búsqueda no está disponible ahora. Prueba más tarde.",
+  "obras.gasto": "Gastó {dev} de {pim}",
+  "obras.sinejecutar": "Sin ejecutar: {monto}",
+  "obras.provincial": "provincial",
+  "ranking.titulo": "¿Quién dejó más presupuesto sin gastar?",
+  "ranking.lead": "Entidades con menor porcentaje de presupuesto ejecutado en {ano}, entre las que tuvieron al menos S/ 1 millón.",
+  "ranking.R": "Gobiernos regionales",
+  "ranking.E": "Gobierno nacional",
+  "ranking.M": "Municipalidades",
+  "ranking.tip": "Gastó {dev} de {pim}",
+  "entidad.lead": "En {ano} tuvo {pim} y gastó el {pct} de ese dinero.",
+  "entidad.pim": "Presupuesto {ano}",
+  "entidad.gastado": "Gastado {ano}",
+  "entidad.encurso": "Avance {ano} (hasta el mes {mes})",
+  "entidad.anos": "Año por año",
+  "entidad.anos.sub": "Presupuesto final de cada año y cuánto se gastó.",
+  "entidad.funciones": "¿En qué lo gastó?",
+  "entidad.funciones.sub": "Distribución del gasto en {ano}.",
+  "entidad.obras": "Obras con más dinero sin gastar",
+  "entidad.obras.sub": "Proyectos de {ano}. Gastar poco no prueba una irregularidad: una obra puede estar empezando o estar paralizada.",
+  "entidad.pares.titulo": "Comparada con entidades parecidas",
+  "entidad.pares.texto": "Entre {n} {grupo} con un presupuesto parecido (de {min} a {max}), ejecutó más que el {pct} de ellas en {ano}.",
+  "entidad.pares.mediana": "Mediana del grupo: {mediana}. Esta entidad: {propio}.",
+  "grupo.distrito": "municipalidades distritales",
+  "grupo.provincia": "municipalidades provinciales",
+  "grupo.departamento": "gobiernos regionales",
+  "grupo.nacional": "entidades del gobierno nacional",
+  "grupo.otro": "entidades",
+  "leyenda.presupuesto": "Presupuesto",
+  "leyenda.gastado": "Gastado",
+  "col.ano": "Año",
+  "col.presupuesto": "Presupuesto",
+  "col.gastado": "Gastado",
+  "col.avance": "Avance",
+  "col.registros": "Registros",
+  "col.estado": "Estado",
+  "como.titulo": "Cómo funciona",
+  "como.lead": "Esta página reúne {filas} registros oficiales de gasto público y se actualiza sola cada día.",
+  "como.arquitectura": "De dónde salen los datos",
+  "como.arquitectura.sub": "Un pipeline de datos en Python y SQL que corre en un clúster Kubernetes (K3s) en Oracle Cloud.",
+  "como.paso.mef": "Archivos CSV del MEF",
+  "como.paso.mef.d": "Un archivo por año, hasta 10 GB cada uno.",
+  "como.paso.airflow": "Airflow",
+  "como.paso.airflow.d": "Descarga solo lo nuevo cada día y ejecuta cada paso en su propio pod.",
+  "como.paso.bronze": "Bronze (Parquet)",
+  "como.paso.bronze.d": "140 GB de CSV quedan en 4.4 GB, con contrato de columnas.",
+  "como.paso.silver": "Silver (dbt + DuckDB)",
+  "como.paso.silver.d": "Tipos, limpieza y conciliación de montos contra el origen.",
+  "como.paso.gold": "Gold (marts)",
+  "como.paso.gold.d": "Tablas listas para la página, con población del INEI.",
+  "como.paso.web": "Este sitio",
+  "como.paso.web.d": "JSON para la página y Parquet para la consola SQL con DuckDB-WASM.",
+  "como.calidad": "Pruebas de calidad",
+  "como.calidad.sub": "En la última construcción corrieron {total} pruebas de dbt: {pass} pasaron, {warn} con aviso y {fail} fallaron.",
+  "como.calidad.sin": "El resumen de pruebas aparece después de la próxima actualización automática.",
+  "como.calidad.ver": "Ver las pruebas",
+  "como.calidad.prueba": "Prueba",
+  "como.calidad.fallas": "Filas observadas",
+  "como.sinnombre": "El MEF publica {n} obras sin nombre. La página las muestra con su código para no esconderlas.",
+  "como.cifras": "Cómo leer las cifras",
+  "como.anos": "Años disponibles",
+  "como.anos.sub": "Algunos archivos oficiales están incompletos. Esos años no se suman en esta página para no mostrar totales falsos.",
+  "como.completo": "Completo",
+  "como.encurso": "En curso, hasta el mes {mes}",
+  "como.incompleto": "Archivo oficial incompleto",
+  "como.fuentes": "Fuentes",
+  "como.codigo": "Código abierto",
+  "como.codigo.texto": "El pipeline, los modelos dbt y esta página están publicados en {github}.",
+  "glosario.pim": "Presupuesto Institucional Modificado: el dinero autorizado para el año, con los cambios hechos después de aprobarlo.",
+  "glosario.pia": "Presupuesto Institucional de Apertura: lo aprobado al inicio del año.",
+  "glosario.devengado": "Gasto reconocido: el bien o servicio ya se recibió y el Estado quedó obligado a pagarlo.",
+  "glosario.girado": "Pago efectivamente realizado.",
+  "glosario.avance": "Gastado (devengado) dividido entre el presupuesto final (PIM).",
+  "glosario.habitante": "Gasto devengado dividido entre la población proyectada por el INEI para ese año.",
+  "glosario.pim.t": "Presupuesto (PIM)",
+  "glosario.pia.t": "Presupuesto inicial (PIA)",
+  "glosario.devengado.t": "Gastado (devengado)",
+  "glosario.girado.t": "Pagado (girado)",
+  "glosario.avance.t": "Avance",
+  "glosario.habitante.t": "Por habitante",
+  "titulo.inicio": "Peru Spend Tracker · ¿En qué se gasta la plata de tus impuestos?",
+  "titulo.obras": "Obras sin ejecutar",
+  "titulo.ranking": "Ranking de ejecución",
+  "titulo.como": "Cómo funciona",
+  "desc.inicio": "Cuánto dinero público tuvo y gastó el Estado peruano, por función, región, entidad y obra. Con una consola SQL que consulta los datos en tu navegador.",
+  "desc.entidad": "Presupuesto, gasto y obras de {nombre} con datos oficiales del MEF.",
+  "meses": "enero,febrero,marzo,abril,mayo,junio,julio,agosto,septiembre,octubre,noviembre,diciembre",
+  "meses.cortos": "ene,feb,mar,abr,may,jun,jul,ago,sep,oct,nov,dic",
+};
+
+const EN = {
+  "skip": "Skip to content",
+  "nav.resumen": "Overview",
+  "nav.obras": "Public works",
+  "nav.ranking": "Ranking",
+  "nav.como": "How it works",
+  "nav.secciones": "Sections",
+  "buscar.label": "Search a public entity",
+  "buscar.placeholder": "Search your district, region or ministry",
+  "buscar.vacio": "No results. Try another name.",
+  "consola": "SQL console",
+  "tema": "Page theme",
+  "tema.claro": "Light",
+  "tema.oscuro": "Dark",
+  "idioma.cambiar": "Español",
+  "idioma.corto": "ES",
+  "idioma.etiqueta": "Ver la página en español",
+  "pie.fuente": "Sources: {mef}, {inei} population and {geo} map. Independent project, not an official government site.",
+  "pie.actualizado": "Data updated on {fecha}.",
+  "cargando": "Loading data…",
+  "error.noencontrado": "We could not find that page.",
+  "volver": "Back to the overview",
+  "compartir": "Share",
+  "enlace.copiado": "Link copied",
+  "ver.sql": "View SQL",
+  "ver.tabla": "View as a table",
+  "ver.mas.obras": "See more public works",
+  "ver.mef": "View at MEF",
+  "ver.mef.titulo": "Official record of the investment in the MEF investment tracking system",
+  "nivel.M": "Municipality",
+  "nivel.R": "Regional government",
+  "nivel.E": "National government",
+  "mil.millones": "billion",
+  "millones": "million",
+  "sin.datos": "n/a",
+  "hasta.mes": "through {mes}",
+  "incompleto": "incomplete",
+  "anos.elegir": "Choose a year",
+  "anos.recientes": "More recent years",
+  "anos.anteriores": "Earlier years",
+  "anos.encurso": "{ano}, in progress through {mes}",
+  "anos.incompleto": "Incomplete official file: not added up",
+  "inicio.datos": "Data as of {fecha} · {filas} M official records · {desde}–{hasta}",
+  "inicio.frase": "spent by the Peruvian State in {ano}: {pct} of its budget.",
+  "inicio.frase.parcial": "spent by the Peruvian State in {ano} through {mes}: {pct} of the year's budget, which is still in progress.",
+  "kpi.pim": "Final budget",
+  "kpi.pim.parcial": "Budget for the year",
+  "kpi.gastado": "Spent",
+  "kpi.gastado.parcial": "Spent through {mes}",
+  "kpi.sin": "Left unspent",
+  "kpi.falta": "Still to spend",
+  "kpi.habitante": "Spending per resident",
+  "kpi.poblacion": "{n} residents (INEI)",
+  "funciones.titulo": "What was it spent on?",
+  "ritmo.titulo": "Spending pace through the year",
+  "ritmo.sub": "Share of the annual budget spent by the end of each month. The dotted line is the average of previous closed years: a large share is spent in December.",
+  "ritmo.ano": "{ano}",
+  "ritmo.promedio": "Average of previous years",
+  "regiones.titulo": "Spending by region",
+  "regiones.sub.avance": "Share of the budget spent inside each department, adding national, regional and municipal government. Scale from {min}% to 100%.",
+  "regiones.sub.pc": "Soles spent inside each department per resident (INEI population projections).",
+  "regiones.sub.pc.sin": "INEI publishes population by department from 2018 on. Choose a year from 2018 to see spending per resident.",
+  "regiones.metrica": "Map measure",
+  "regiones.avance": "% spent",
+  "regiones.pc": "Per resident",
+  "regiones.mapa": "Map of Peru by department. Click a department to see its public works.",
+  "regiones.tip": "{dep}: spent {dev} of {pim} ({pct})",
+  "regiones.tip.pc": "{dep}: {pc} per resident · {pob} residents",
+  "obras.inicio.titulo": "Public works with the most unspent money in {ano}",
+  "obras.aviso": "Spending little does not prove corruption. A project may be starting, have technical problems or have received funds at year end.",
+  "obras.aviso.largo": "Spending little does not prove corruption. A project may be starting, have technical problems or have received funds at year end. It is a signal to ask questions.",
+  "obras.titulo": "Public works that left the money unspent",
+  "obras.lead": "Projects with the most unspent money in {ano}, from most to least.",
+  "obras.buscar": "Search in plain words: health post, football field, roads…",
+  "obras.buscar.label": "Search public works",
+  "obras.dep": "Department",
+  "obras.prov": "Province",
+  "obras.dist": "District",
+  "obras.todo": "All of Peru",
+  "obras.todas": "All",
+  "obras.todos": "All",
+  "obras.consultando": "Querying public works…",
+  "obras.n50": "The 50 public works with the most unspent money.",
+  "obras.n": "{n} public works with the most unspent money.",
+  "obras.ninguna": "No public works recorded in {ano} for this filter.",
+  "obras.error": "Could not query public works. Try again.",
+  "obras.buscando": "Searching…",
+  "obras.parecidas": "{n} public works similar to “{q}”.",
+  "obras.busqueda.error": "Search is not available right now. Try later.",
+  "obras.gasto": "Spent {dev} of {pim}",
+  "obras.sinejecutar": "Unspent: {monto}",
+  "obras.provincial": "provincial",
+  "ranking.titulo": "Who left the most budget unspent?",
+  "ranking.lead": "Entities with the lowest share of budget spent in {ano}, among those with at least S/ 1 million.",
+  "ranking.R": "Regional governments",
+  "ranking.E": "National government",
+  "ranking.M": "Municipalities",
+  "ranking.tip": "Spent {dev} of {pim}",
+  "entidad.lead": "In {ano} it had {pim} and spent {pct} of that money.",
+  "entidad.pim": "Budget {ano}",
+  "entidad.gastado": "Spent {ano}",
+  "entidad.encurso": "Progress {ano} (through month {mes})",
+  "entidad.anos": "Year by year",
+  "entidad.anos.sub": "Final budget for each year and how much was spent.",
+  "entidad.funciones": "What did it spend on?",
+  "entidad.funciones.sub": "Breakdown of spending in {ano}.",
+  "entidad.obras": "Public works with the most unspent money",
+  "entidad.obras.sub": "Projects in {ano}. Spending little does not prove wrongdoing: a project may be starting or stalled.",
+  "entidad.pares.titulo": "Compared with similar entities",
+  "entidad.pares.texto": "Among {n} {grupo} with a similar budget ({min} to {max}), it spent a larger share than {pct} of them in {ano}.",
+  "entidad.pares.mediana": "Group median: {mediana}. This entity: {propio}.",
+  "grupo.distrito": "district municipalities",
+  "grupo.provincia": "provincial municipalities",
+  "grupo.departamento": "regional governments",
+  "grupo.nacional": "national government entities",
+  "grupo.otro": "entities",
+  "leyenda.presupuesto": "Budget",
+  "leyenda.gastado": "Spent",
+  "col.ano": "Year",
+  "col.presupuesto": "Budget",
+  "col.gastado": "Spent",
+  "col.avance": "Progress",
+  "col.registros": "Records",
+  "col.estado": "Status",
+  "como.titulo": "How it works",
+  "como.lead": "This page brings together {filas} official public spending records and updates itself every day.",
+  "como.arquitectura": "Where the data comes from",
+  "como.arquitectura.sub": "A Python and SQL data pipeline running on a Kubernetes (K3s) cluster in Oracle Cloud.",
+  "como.paso.mef": "MEF CSV files",
+  "como.paso.mef.d": "One file per year, up to 10 GB each.",
+  "como.paso.airflow": "Airflow",
+  "como.paso.airflow.d": "Downloads only what is new every day and runs each step in its own pod.",
+  "como.paso.bronze": "Bronze (Parquet)",
+  "como.paso.bronze.d": "140 GB of CSV become 4.4 GB, with a column contract.",
+  "como.paso.silver": "Silver (dbt + DuckDB)",
+  "como.paso.silver.d": "Types, cleaning and reconciliation of amounts against the source.",
+  "como.paso.gold": "Gold (marts)",
+  "como.paso.gold.d": "Tables ready for the page, with INEI population.",
+  "como.paso.web": "This site",
+  "como.paso.web.d": "JSON for the page and Parquet for the SQL console with DuckDB-WASM.",
+  "como.calidad": "Quality checks",
+  "como.calidad.sub": "The latest build ran {total} dbt tests: {pass} passed, {warn} with warnings and {fail} failed.",
+  "como.calidad.sin": "The test summary appears after the next automatic update.",
+  "como.calidad.ver": "See the tests",
+  "como.calidad.prueba": "Test",
+  "como.calidad.fallas": "Flagged rows",
+  "como.sinnombre": "MEF publishes {n} public works without a name. The page shows them with their code instead of hiding them.",
+  "como.cifras": "How to read the figures",
+  "como.anos": "Available years",
+  "como.anos.sub": "Some official files are incomplete. Those years are not added up on this page to avoid false totals.",
+  "como.completo": "Complete",
+  "como.encurso": "In progress, through month {mes}",
+  "como.incompleto": "Incomplete official file",
+  "como.fuentes": "Sources",
+  "como.codigo": "Open source",
+  "como.codigo.texto": "The pipeline, the dbt models and this page are published on {github}.",
+  "glosario.pim": "Modified Institutional Budget: the money authorized for the year, including changes made after approval.",
+  "glosario.pia": "Opening Institutional Budget: what was approved at the start of the year.",
+  "glosario.devengado": "Accrued spending: the good or service was received and the State is obliged to pay.",
+  "glosario.girado": "Payment actually made.",
+  "glosario.avance": "Spent (accrued) divided by the final budget (PIM).",
+  "glosario.habitante": "Accrued spending divided by the population projected by INEI for that year.",
+  "glosario.pim.t": "Budget (PIM)",
+  "glosario.pia.t": "Opening budget (PIA)",
+  "glosario.devengado.t": "Spent (accrued)",
+  "glosario.girado.t": "Paid",
+  "glosario.avance.t": "Progress",
+  "glosario.habitante.t": "Per resident",
+  "titulo.inicio": "Peru Spend Tracker · Where do your taxes go?",
+  "titulo.obras": "Unspent public works",
+  "titulo.ranking": "Spending ranking",
+  "titulo.como": "How it works",
+  "desc.inicio": "How much public money the Peruvian State had and spent, by function, region, entity and public work. With a SQL console that queries the data in your browser.",
+  "desc.entidad": "Budget, spending and public works of {nombre} with official MEF data.",
+  "meses": "January,February,March,April,May,June,July,August,September,October,November,December",
+  "meses.cortos": "Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec",
+};
+
+// Funciones del clasificador presupuestal del MEF.
+const FUNCIONES_EN = {
+  "AGROPECUARIA": "Agriculture", "AMBIENTE": "Environment", "MEDIO AMBIENTE": "Environment",
+  "COMERCIO": "Trade", "COMUNICACIONES": "Communications", "CULTURA Y DEPORTE": "Culture and sports",
+  "DEFENSA Y SEGURIDAD NACIONAL": "Defense and national security", "DEUDA PUBLICA": "Public debt",
+  "EDUCACION": "Education", "ENERGIA": "Energy", "INDUSTRIA": "Industry", "JUSTICIA": "Justice",
+  "LEGISLATIVA": "Legislature", "MINERIA": "Mining", "ORDEN PUBLICO Y SEGURIDAD": "Public order and safety",
+  "PESCA": "Fisheries", "PLANEAMIENTO, GESTION Y RESERVA DE CONTINGENCIA": "Planning, management and contingency reserve",
+  "PREVISION SOCIAL": "Pensions", "PROTECCION SOCIAL": "Social protection",
+  "RELACIONES EXTERIORES": "Foreign affairs", "SALUD": "Health", "SANEAMIENTO": "Water and sanitation",
+  "TRABAJO": "Labor", "TRANSPORTE": "Transport", "TURISMO": "Tourism",
+  "VIVIENDA Y DESARROLLO URBANO": "Housing and urban development",
+};
+
+const DICTS = { es: ES, en: EN };
+
+/** Permite que cada modulo (por ejemplo, la consola) registre sus propios textos. */
+export function addStrings(es, en) {
+  Object.assign(ES, es);
+  Object.assign(EN, en);
+}
+
+function detect() {
+  const fromUrl = new URLSearchParams(location.search).get("lang");
+  if (fromUrl === "en" || fromUrl === "es") return fromUrl;
+  try {
+    const saved = localStorage.getItem(STORE_KEY);
+    if (saved === "en" || saved === "es") return saved;
+  } catch { /* sin almacenamiento */ }
+  return "es";
+}
+
+export let lang = detect();
+let numberFormats = makeFormats();
+
+function makeFormats() {
+  const locale = lang === "en" ? "en-US" : "es-PE";
+  return {
+    locale,
+    one: new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }),
+    two: new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }),
+    whole: new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }),
+  };
+}
+
+/** Traduce una clave, reemplazando {variables}. Si falta en ingles, usa el espanol. */
+export function t(key, vars = {}) {
+  const text = DICTS[lang][key] ?? ES[key] ?? key;
+  return text.replace(/\{(\w+)\}/g, (_, name) => (name in vars ? String(vars[name]) : `{${name}}`));
+}
+
+export const fmt = {
+  one: (n) => numberFormats.one.format(n),
+  two: (n) => numberFormats.two.format(n),
+  whole: (n) => numberFormats.whole.format(n),
+  get locale() { return numberFormats.locale; },
+};
+
+export function months(short = false) {
+  return t(short ? "meses.cortos" : "meses").split(",");
+}
+
+/** Montos en soles con la escala que se lee mejor. */
+export function soles(n) {
+  const abs = Math.abs(n ?? 0);
+  if (abs >= 1e9) return `S/ ${fmt.one(n / 1e9)} ${t("mil.millones")}`;
+  if (abs >= 1e6) return `S/ ${fmt.one(n / 1e6)} ${t("millones")}`;
+  return `S/ ${fmt.whole(n ?? 0)}`;
+}
+
+export function pctText(ratio) {
+  return ratio == null || !Number.isFinite(ratio) ? t("sin.datos") : `${fmt.one(ratio * 100)}%`;
+}
+
+/** Nombre de una funcion del MEF en el idioma actual (los nombres propios no se traducen). */
+export function funcion(name, titleCase) {
+  if (lang === "en" && FUNCIONES_EN[name]) return FUNCIONES_EN[name];
+  return titleCase(name);
+}
+
+export function setLang(next) {
+  lang = next === "en" ? "en" : "es";
+  numberFormats = makeFormats();
+  try { localStorage.setItem(STORE_KEY, lang); } catch { /* sin almacenamiento */ }
+  applyDom();
+  document.dispatchEvent(new CustomEvent("pst:idioma", { detail: lang }));
+}
+
+/** Traduce los textos fijos del HTML: data-i18n (texto) y data-i18n-attr ("atributo:clave;..."). */
+export function applyDom(root = document) {
+  document.documentElement.lang = lang === "en" ? "en" : "es-PE";
+  root.querySelectorAll("[data-i18n]").forEach((node) => { node.textContent = t(node.dataset.i18n); });
+  root.querySelectorAll("[data-i18n-attr]").forEach((node) => {
+    for (const pair of node.dataset.i18nAttr.split(";")) {
+      const [attr, key] = pair.split(":");
+      if (attr && key) node.setAttribute(attr.trim(), t(key.trim()));
+    }
+  });
+}

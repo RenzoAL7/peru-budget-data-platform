@@ -4,5 +4,7 @@ metadata:
   name: gasto-publico
 spec:
   hard:
-    limits.memory: 12Gi
+    # Margen para que un despliegue (pods nuevos antes de retirar los viejos) coincida con
+    # un pod del pipeline sin que la cuota lo bloquee. Lo reservado se controla con requests.
+    limits.memory: 16Gi
     requests.memory: 5Gi

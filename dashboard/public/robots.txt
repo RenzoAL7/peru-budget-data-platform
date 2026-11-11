@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+
+Sitemap: https://peru-spend-tracker.renzoaguilar.dev/data/sitemap.xml
