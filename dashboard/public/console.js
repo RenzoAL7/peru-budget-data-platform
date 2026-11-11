@@ -28,6 +28,7 @@ addStrings({
   "motor.descarga": "Descargando DuckDB-WASM (~8 MB, una sola vez)…",
   "motor.listo": "DuckDB {version} en tu navegador · {n} tablas.",
   "motor.error": "Motor no disponible.",
+  "motor.pausa": "Motor en pausa para liberar memoria; vuelve a iniciar con la próxima consulta.",
   "motor.sintablas": "Las tablas aún no están publicadas.",
   "error.descarga": "No se pudo descargar el motor SQL. Revisa tu conexión y vuelve a intentarlo.",
   "error.tiempo": "La consulta tardó más de 60 s y se canceló.",
@@ -105,6 +106,7 @@ addStrings({
   "motor.descarga": "Downloading DuckDB-WASM (~8 MB, only once)…",
   "motor.listo": "DuckDB {version} in your browser · {n} tables.",
   "motor.error": "Engine not available.",
+  "motor.pausa": "Engine paused to free memory; it restarts with the next query.",
   "motor.sintablas": "The tables are not published yet.",
   "error.descarga": "Could not download the SQL engine. Check your connection and try again.",
   "error.tiempo": "The query took longer than 60 s and was cancelled.",
@@ -156,6 +158,10 @@ addStrings({
 const MAX_KEEP = 5000;
 const PAGE_SIZE = 100;
 const TIMEOUT_MS = 60_000;
+// Sin consultas por este tiempo el motor se apaga; con la consola abierta se espera mas.
+const IDLE_MS = 2 * 60_000;
+const IDLE_OPEN_MS = 10 * 60_000;
+const MEMORY_LIMIT = "512MB";
 const HISTORY_KEY = "pst-historial";
 const STORE_KEY = "pst-consola";
 const WIDTH_KEY = "pst-consola-ancho";
@@ -503,6 +509,8 @@ async function startEngine() {
     await db.instantiate(new URL("duckdb-eh.wasm?v=dev", base).href);
     await db.open({ query: { castBigIntToDouble: true, castDecimalToDouble: true } });
     const conn = await db.connect();
+    // Tope para la cache de Parquet y los resultados intermedios; sin el, la pestaña crece sin limite.
+    await conn.query(`SET memory_limit = '${MEMORY_LIMIT}'`);
     // La extension Parquet se sirve desde este sitio (ver dashboard/vendor.mjs).
     await conn.query(`SET custom_extension_repository = '${new URL("extensions", base).href}'`);
     await conn.query("LOAD parquet");
@@ -512,7 +520,10 @@ async function startEngine() {
       await conn.query(`CREATE VIEW ${tabla} AS SELECT * FROM read_parquet('${tabla}.parquet')`);
     }
     const version = await db.getVersion();
-    if (engine === attempt) setStatus(t("motor.listo", { version, n: catalog.length }));
+    if (engine === attempt) {
+      paused = false;
+      setStatus(t("motor.listo", { version, n: catalog.length }));
+    }
     // Conexion aparte para las consultas de la pagina, para no mezclarlas con las de la consola.
     const pageConn = await db.connect();
     return { db, conn, pageConn, worker, version };
@@ -541,11 +552,48 @@ async function stopEngine() {
   } catch { /* el motor no llego a iniciar */ }
 }
 
+/* El motor (worker, wasm y cache de Parquet) ocupa cientos de MB y antes quedaba vivo hasta cerrar
+   la pestaña. Ahora se apaga tras un rato sin consultas y vuelve a iniciar con la siguiente; el wasm
+   ya esta en la cache HTTP, asi que el reinicio no lo descarga otra vez. */
+let lastUse = 0;
+let idleTimer = null;
+let pageQueries = 0;
+let paused = false;
+const idleLimit = () => (ui.aside && !ui.aside.hidden ? IDLE_OPEN_MS : IDLE_MS);
+
+function touchEngine() {
+  lastUse = Date.now();
+  scheduleSleep();
+}
+
+function scheduleSleep() {
+  clearTimeout(idleTimer);
+  idleTimer = null;
+  if (!engine) return;
+  idleTimer = setTimeout(sleepEngine, Math.max(idleLimit() - (Date.now() - lastUse), 0));
+}
+
+async function sleepEngine() {
+  idleTimer = null;
+  // Una consulta en curso reprograma el apagado al terminar.
+  if (!engine || pageQueries || state.running) return;
+  if (Date.now() - lastUse < idleLimit()) { scheduleSleep(); return; }
+  await stopEngine();
+  paused = true;
+  setStatus(t("motor.pausa"));
+}
+
 /** Ejecuta una consulta para la pagina (no para la consola) y devuelve filas como objetos. */
 export async function query(sql) {
-  const { pageConn } = await startEngine();
-  const table = await pageConn.query(sql);
-  return table.toArray().map((row) => row.toJSON());
+  pageQueries += 1;
+  try {
+    const { pageConn } = await startEngine();
+    const table = await pageConn.query(sql);
+    return table.toArray().map((row) => row.toJSON());
+  } finally {
+    pageQueries -= 1;
+    touchEngine();
+  }
 }
 
 /* ---------- Formato de celdas ---------- */
@@ -811,6 +859,7 @@ async function execute(sql, { plan = false } = {}) {
     cancelRun?.("listo");
     cancelRun = null;
     setRunning(false);
+    touchEngine();
   }
 }
 
@@ -977,6 +1026,7 @@ export function openConsole({ runNow = !hasRun } = {}) {
   ui.toggle.setAttribute("aria-expanded", "true");
   store.set(STORE_KEY, "abierta");
   applyWidth();
+  scheduleSleep();
   loadEditor();
   if (narrow()) {
     document.body.classList.add("consola-movil");
@@ -992,6 +1042,7 @@ export function closeConsole() {
   document.body.classList.remove("con-consola", "consola-movil");
   ui.toggle.setAttribute("aria-expanded", "false");
   store.set(STORE_KEY, "cerrada");
+  scheduleSleep();
   (opener?.isConnected ? opener : ui.toggle).focus();
   opener = null;
 }
@@ -1025,6 +1076,7 @@ function retranslate() {
   renderHistory();
   if (!state.running) ui.run.textContent = t("consola.ejecutar");
   if (engineVersion) setStatus(t("motor.listo", { version: engineVersion, n: catalog.length }));
+  else if (paused) setStatus(t("motor.pausa"));
   else if (!hasRun) setStatus(t("motor.espera"));
   if (state.result) renderResult();
   // Las consultas de ejemplo incluyen un comentario en el idioma de la pagina.
