@@ -74,7 +74,7 @@ function setParams(values) {
 function legacyRedirect() {
   const match = location.hash.match(/^#\/(e\/([EMR]\d+)|obras|ranking|datos)?/);
   if (!match) return;
-  const target = match[2] ? `entidad/${match[2]}` : match[1] === "datos" ? "como-funciona" : (match[1] ?? "");
+  const target = match[2] ? `entidad/${match[2]}` : (match[1] ?? "");
   history.replaceState({}, "", new URL(target || "./", document.baseURI));
 }
 
@@ -397,7 +397,7 @@ async function openData() {
       <p>${esc(t("datos.texto", { n: catalog.length, filas: fmt.whole(rows), registros: fmt.one(meta.filas / 1e6) }))}</p>
       <div class="od-actions">
         <button type="button" class="od-main" data-abrir-consola>${esc(t("datos.consola"))}</button>
-        <a class="od-alt" href="como-funciona">${esc(t("datos.como"))}</a>
+        <a class="od-alt" href="datos">${esc(t("datos.ver.tablas", { n: catalog.length }))}</a>
       </div>
     </div>
     <div class="od-files">
@@ -918,6 +918,67 @@ function mountFlow(figure) {
   loadFlowLogos().then((data) => { logos = data ?? {}; render(); });
 }
 
+/* ---------- Datos abiertos ---------- */
+const fileSize = (bytes) => (bytes >= 1e6 ? `${fmt.one(bytes / 1e6)} MB` : `${fmt.whole(Math.max(bytes, 1) / 1e3)} KB`);
+
+async function datos() {
+  const catalog = await load("sql/catalogo.json");
+  const base = new URL("data/sql/", document.baseURI).href;
+  const rows = catalog.reduce((s, c) => s + c.filas, 0);
+  const bytes = catalog.reduce((s, c) => s + c.bytes, 0);
+  const example = `${base}mart_entidad_anual.parquet`;
+  const updated = new Date(meta.actualizado).toLocaleDateString(fmt.locale, { day: "numeric", month: "long", year: "numeric" });
+  const incomplete = meta.cobertura.filter((c) => c.estado !== "completo").map((c) => c.ano);
+  const running = meta.cobertura.find((c) => c.ano === meta.ano_en_curso);
+  const snippets = [
+    ["DuckDB", `SELECT entidad_id, year, pim, devengado\nFROM '${example}'\nWHERE year = ${meta.ano_cerrado}\nLIMIT 10;`],
+    ["Python", `import pandas as pd\n\ndf = pd.read_parquet("${example}")\nprint(df.head())`],
+    ["R", `url <- "${example}"\ndownload.file(url, "mart_entidad_anual.parquet", mode = "wb")\ndf <- arrow::read_parquet("mart_entidad_anual.parquet")`],
+  ];
+  const card = (c) => `<li class="dt-card">
+      <div class="dt-head"><h3 class="mono">${esc(c.tabla)}</h3><span>${esc(t("datos.filas", { n: fmt.whole(c.filas) }))} · ${esc(fileSize(c.bytes))}</span></div>
+      <p>${esc(t(`tabla.${c.tabla}`))}</p>
+      <div class="dt-actions">
+        <a class="dt-btn dt-main" href="data/sql/${esc(c.tabla)}.parquet" download>${esc(t("datos.descargar"))}</a>
+        <button type="button" class="dt-btn" data-explorar="${esc(c.tabla)}">${esc(t("datos.explorar"))}</button>
+        <button type="button" class="dt-btn" data-copiar="${esc(base + c.tabla)}.parquet">${esc(t("datos.copiar"))}</button>
+      </div>
+      <details><summary>${esc(t("datos.columnas", { n: c.columnas.length }))}</summary><div class="scroll"><table>
+        <thead><tr><th>${esc(t("datos.col.nombre"))}</th><th>${esc(t("datos.col.tipo"))}</th></tr></thead>
+        <tbody>${c.columnas.map((col) => `<tr><td class="mono">${esc(col.nombre)}</td><td class="mono">${esc(col.tipo)}</td></tr>`).join("")}</tbody>
+      </table></div></details>
+    </li>`;
+
+  main.innerHTML = `<h1>${esc(t("datos.page.titulo"))}</h1>
+    <p class="lead">${esc(t("datos.page.lead", { n: catalog.length, filas: fmt.whole(rows), registros: fmt.one(meta.filas / 1e6), peso: fileSize(bytes) }))}</p>
+    <div class="od-actions dt-top">
+      <button type="button" class="od-main" data-abrir-consola>${esc(t("datos.consola"))}</button>
+      <a class="dt-btn" href="como-funciona">${esc(t("datos.page.como"))}</a>
+    </div>
+    <section aria-labelledby="usar">
+      <h2 id="usar">${esc(t("datos.page.usar"))}</h2>
+      <p class="sub">${esc(t("datos.page.usar.sub"))}</p>
+      <div class="dt-snippets">${snippets.map(([name, code]) => `<figure class="dt-snippet"><figcaption>${esc(name)}</figcaption><pre class="od-code" tabindex="0">${esc(code)}</pre></figure>`).join("")}</div>
+    </section>
+    <section aria-labelledby="tablas">
+      <h2 id="tablas">${esc(t("datos.page.tablas", { n: catalog.length }))}</h2>
+      <p class="sub">${esc(t("datos.page.tablas.sub"))}</p>
+      <ul class="dt-list">${catalog.map(card).join("")}</ul>
+    </section>
+    <section aria-labelledby="antes">
+      <h2 id="antes">${esc(t("datos.page.antes"))}</h2>
+      <ul class="dt-notes">
+        <li>${esc(t("datos.nota.soles"))}</li>
+        ${incomplete.length ? `<li>${esc(t("datos.nota.incompletos", { anos: new Intl.ListFormat(fmt.locale, { type: "conjunction" }).format(incomplete.map(String)) }))}</li>` : ""}
+        ${running && running.ultimo_mes < 12 ? `<li>${esc(t("datos.nota.encurso", { ano: running.ano, mes: monthName(running.ultimo_mes) }))}</li>` : ""}
+        <li>${esc(t("datos.nota.actualizado", { fecha: updated }))}</li>
+        <li>${esc(t("datos.nota.ejecucion"))}</li>
+        <li>${esc(t("datos.nota.cita"))}</li>
+      </ul>
+    </section>`;
+  setHead(`${t("titulo.datos")} · Peru Spend Tracker`, t("desc.datos"), "datos");
+}
+
 async function como() {
   const quality = meta.calidad;
   const steps = ["mef", "airflow", "bronze", "silver", "gold", "web"];
@@ -1109,7 +1170,12 @@ main.addEventListener("click", (ev) => {
   if (ev.target.closest("[data-buscar]")) { document.getElementById("q").focus(); return; }
   if (ev.target.closest("[data-abrir-consola]")) { document.getElementById("abrir-consola").click(); return; }
   const jump = ev.target.closest("[data-ir]");
-  if (jump) document.getElementById(jump.dataset.ir)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (jump) { document.getElementById(jump.dataset.ir)?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+  // Pagina de datos abiertos: abrir una tabla en la consola o copiar la URL de su Parquet.
+  const table = ev.target.closest("[data-explorar]");
+  if (table) { showSql(`SELECT *\nFROM ${table.dataset.explorar}\nLIMIT 100`, table.dataset.explorar); return; }
+  const copy = ev.target.closest("[data-copiar]");
+  if (copy) navigator.clipboard.writeText(copy.dataset.copiar).then(() => toast(t("datos.copiado")), () => toast(copy.dataset.copiar));
 });
 
 /* ---------- Rutas ---------- */
@@ -1130,6 +1196,7 @@ async function route() {
     else if (section === "obras") await obras(params);
     else if (section === "ranking") await ranking();
     else if (section === "como-funciona") await como();
+    else if (section === "datos") await datos();
     else if (section === "") await home(params);
     else throw new Error("Ruta desconocida");
     if (mine === routing && !location.hash) scrollTo(0, 0);

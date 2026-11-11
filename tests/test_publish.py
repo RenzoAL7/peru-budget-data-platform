@@ -60,7 +60,7 @@ def test_sitemap_incluye_paginas_y_fichas(tmp_path):
     path = tmp_path / "sitemap.xml"
     write_sitemap(path, [("M1", "MUNICIPALIDAD DISTRITAL DE ANCON")], "2026-11-10T10:00:00+00:00")
     xml = path.read_text()
-    assert xml.count("<url>") == 5
+    assert xml.count("<url>") == 6
     assert "/entidad/M1-ancon</loc><lastmod>2026-11-10</lastmod>" in xml
 
 

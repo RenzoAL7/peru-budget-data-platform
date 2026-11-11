@@ -47,7 +47,7 @@ SQL_TABLES = (
     "mart_fuente",
     "mart_cobertura",
 )
-PAGINAS = ("", "obras", "ranking", "como-funciona")
+PAGINAS = ("", "obras", "ranking", "datos", "como-funciona")
 
 
 def _number(value):
