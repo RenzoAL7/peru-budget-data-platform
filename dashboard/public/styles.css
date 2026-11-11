@@ -231,6 +231,27 @@ h2.kicker { font-size: 12px; line-height: 1.4; }
 .od-code .k { color: #9cc5f0; }
 .od-code .s { color: var(--c-gold); }
 
+/* Pagina de datos abiertos */
+.dt-top { margin-top: 20px; }
+.dt-btn { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--field-line); border-radius: 2px; background: var(--field); color: var(--link); font: 500 14px var(--sans); text-decoration: none; }
+.dt-btn:hover { text-decoration: none; }
+.dt-main { background: var(--bar); border-color: var(--bar); color: var(--bg); font-weight: 600; }
+.dt-snippets { display: grid; gap: 14px; margin-top: 14px; }
+.dt-snippet { margin: 0; min-width: 0; }
+.dt-snippet figcaption { margin-bottom: 6px; color: var(--muted); font: 600 12px var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+.dt-snippet .od-code { background: var(--console-bg); color: var(--c-strong); white-space: pre; }
+.dt-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); gap: 16px; margin: 16px 0 0; padding: 0; list-style: none; }
+.dt-card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 18px 20px; background: var(--card); border: 1px solid var(--line); }
+.dt-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.dt-head h3 { font-size: 16px; overflow-wrap: anywhere; }
+.dt-head span { color: var(--muted); font: 13px var(--mono); }
+.dt-card > p { margin: 0; color: var(--strong); font-size: 15px; }
+.dt-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+.dt-card summary { min-height: 44px; display: flex; align-items: center; color: var(--link); cursor: pointer; font-size: 14px; font-weight: 500; }
+.dt-card table { font-size: 13px; }
+.dt-notes { margin: 12px 0 0; padding-left: 20px; max-width: 52em; }
+.dt-notes li { padding: 4px 0; }
+
 /* Ritmo mensual */
 .pace { margin: 14px 0 0; }
 .pace svg, .chart svg { display: block; width: 100%; height: auto; overflow: visible; }

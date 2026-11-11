@@ -14,7 +14,9 @@ Hay dos perfiles: `overlays/2ocpu` para la VM actual y `overlays/4ocpu` para cua
 
 ## Secretos
 
-Nunca se guardan en Git. Se crean una vez en el clúster:
+Nunca se guardan en Git. Se crean una vez en el clúster.
+
+Las claves de OCI Object Storage se cargan desde la laptop con `scripts/cargar-credenciales-oci.sh`. El script pide la Customer Secret Key por teclado y la envía por SSH sin dejarla en el historial. A mano sería así:
 
 ```bash
 kubectl -n gasto-publico create secret generic gasto-secrets \
