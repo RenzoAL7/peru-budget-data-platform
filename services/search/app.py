@@ -15,6 +15,8 @@ from gasto_pipeline.semantic import clean_name, embed, load_model
 INDEX_PATH = os.getenv("INDEX_PATH", "/data/gold/search/index.npz")
 ORIGINS = [o for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o]
 TOKEN = os.getenv("SEARCH_TOKEN", "")
+TEXT = {"nombre", "entidad"}
+UNUSED = {"keys", "codigo"}
 state: dict = {}
 lock = threading.Lock()
 
@@ -42,8 +44,14 @@ def ensure_loaded() -> dict:
         state.pop("index", None)
         if "model" not in state:
             state["model"] = load_model()
+        # numpy guarda cada texto con el ancho del mas largo (4 bytes por caracter): los
+        # nombres pasan a listas de Python y las columnas que la API no usa no se cargan.
         with np.load(INDEX_PATH, allow_pickle=False) as data:
-            loaded = {name: data[name] for name in data.files}
+            loaded = {
+                name: data[name].tolist() if name in TEXT else data[name]
+                for name in data.files
+                if name not in UNUSED
+            }
         loaded.update(model=state["model"], version=version)
         state["index"] = loaded
         return loaded

@@ -33,11 +33,17 @@ metadata:
   name: airflow-config
 data:
   AIRFLOW__CORE__EXECUTOR: LocalExecutor
-  AIRFLOW__CORE__PARALLELISM: "4"
+  # El pipeline corre en serie y la cuota solo admite un pod a la vez: basta un worker.
+  # Cada worker ocioso del LocalExecutor ocupa unos 160 MiB.
+  AIRFLOW__CORE__PARALLELISM: "1"
   AIRFLOW__CORE__LOAD_EXAMPLES: "False"
   AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api:8080/execution/
   AIRFLOW__API__EXPOSE_CONFIG: "False"
-  AIRFLOW__SCHEDULER__PARSING_PROCESSES: "1"
+  # Los DAGs van dentro de la imagen y solo cambian al desplegar: no hace falta releerlos
+  # cada 30 s ni que el scheduler despierte cada segundo.
+  AIRFLOW__DAG_PROCESSOR__PARSING_PROCESSES: "1"
+  AIRFLOW__DAG_PROCESSOR__MIN_FILE_PROCESS_INTERVAL: "300"
+  AIRFLOW__SCHEDULER__SCHEDULER_IDLE_SLEEP_TIME: "5"
   GASTO_NAMESPACE: gasto-publico
   PIPELINE_MEMORY_LIMIT: 5Gi
   PIPELINE_CPU_LIMIT: 1500m
